@@ -1,0 +1,1091 @@
+<script>
+  // --- FORM RENDERING & HANDLING ---
+  // --- CONFIGURATION ---
+  const FORMS_REQUIRING_SUB_DEPT = ["011", "012", "009", "014", "026"];
+
+  window.FORM_CONFIG = {
+    "003": {
+      gradientClass: "bg-gradient-to-r from-gray-500 to-gray-600",
+      iconClass: "fas fa-burn",
+      detailSectionTitleKey: "formSectionBMedia",
+      addRowButtonTextKey: "btnAddMedia",
+      addRowFunction: addMediaRow003,
+      detailContainerId: "media-details-container-003",
+      bodyRenderer: null,
+    },
+    "010": {
+      gradientClass: "bg-gradient-to-r from-blue-600 to-blue-700",
+      iconClass: "fas fa-server",
+      detailSectionTitleKey: "formSectionB",
+      addRowButtonTextKey: "btnAddServer",
+      addRowFunction: addServerRow010,
+      detailContainerId: "server-details-container-010",
+      bodyRenderer: null,
+    },
+    "011": {
+      gradientClass: "bg-gradient-to-r from-green-600 to-green-700",
+      iconClass: "fas fa-shield-alt",
+      bodyRenderer: renderFormBody011,
+      addRowFunction: addFirewallRuleRow011,
+    },
+    "012": {
+      gradientClass: "bg-gradient-to-r from-purple-600 to-purple-700",
+      iconClass: "fas fa-compact-disc",
+      detailSectionTitleKey: "formSectionBSoftware",
+      addRowButtonTextKey: "btnAddSoftware",
+      addRowFunction: addSoftwareRow012,
+      detailContainerId: "software-details-container-012",
+      bodyRenderer: null,
+    },
+    "013": {
+      gradientClass: "bg-gradient-to-r from-red-500 to-orange-500",
+      iconClass: "fas fa-network-wired",
+      bodyRenderer: renderFormBody013,
+      addRowFunction: null,
+    },
+    "014": {
+      gradientClass: "bg-gradient-to-r from-teal-500 to-cyan-600",
+      iconClass: "fas fa-globe",
+      bodyRenderer: renderFormBody014,
+      addRowFunction: addInternetAccessRow014,
+    },
+    "025": {
+      gradientClass: "bg-gradient-to-r from-cyan-500 to-blue-500",
+      iconClass: "fas fa-user-plus",
+      requesterNameLabelKey: "formRequestorForNewEmployee",
+      bodyRenderer: renderFormBody025,
+      addRowFunction: null,
+    },
+    "026": {
+      gradientClass: "bg-gradient-to-r from-yellow-500 to-orange-500",
+      iconClass: "fas fa-key",
+      bodyRenderer: renderFormBody026,
+      addRowFunction: addSapPermissionRow026,
+    },
+    "009": {
+      gradientClass: "bg-gradient-to-r from-indigo-500 to-purple-600",
+      iconClass: "fas fa-cogs",
+      bodyRenderer: renderFormBody009,
+      addRowFunction: addApplicationRow009,
+    },
+    "099": {
+      gradientClass: "bg-gradient-to-r from-indigo-500 to-purple-600",
+      iconClass: "fas fa-laptop",
+      bodyRenderer: renderFormBody099,
+    },
+    100: {
+      gradientClass: "bg-gradient-to-r from-pink-500 to-rose-500",
+      iconClass: "fas fa-box-open",
+      bodyRenderer: renderFormBody100,
+      addRowFunction: addItemRow100,
+    },
+    101: {
+      gradientClass: "bg-gradient-to-r from-slate-500 to-slate-600",
+      iconClass: "fas fa-dumpster-fire",
+      detailSectionTitleKey: "formSectionBDisposal",
+      addRowButtonTextKey: "btnAddAsset",
+      addRowFunction: addAssetRow101,
+      detailContainerId: "asset-disposal-container-101",
+      bodyRenderer: null,
+    },
+  };
+
+  function renderStandardDetailBody(formId) {
+    const config = FORM_CONFIG[formId];
+    return `
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${
+            appState.translations[config.detailSectionTitleKey]
+          }</h3>
+          <button type="button" onclick="FORM_CONFIG['${formId}'].addRowFunction()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            <span class="mr-2">+</span>
+            ${appState.translations[config.addRowButtonTextKey]}
+          </button>
+        </div>
+        <div id="${config.detailContainerId}" class="space-y-4"></div>
+      </div>`;
+  }
+
+  function renderRequesterInfoSection(formId) {
+    const formConfig = FORM_CONFIG[formId] || {};
+    const requesterNameLabelKey =
+      formConfig.requesterNameLabelKey || "formRequesterName";
+    const departmentOptions = appState.availableDepartments
+      .map((dept) => `<option value="${dept}">${dept}</option>`)
+      .join("");
+    const positionOptions = appState.availablePositions
+      .map((pos) => `<option value="${pos}">${pos}</option>`)
+      .join("");
+    return `
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${
+          appState.translations.formSectionA
+        }</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${
+              appState.translations[requesterNameLabelKey]
+            } *</label>
+            <input type="text" id="requester-name-${formId}" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="${
+      appState.translations.formPlaceholderName
+    }">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${
+              appState.translations.formPosition
+            }</label>
+            <select id="position-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+              <option value="">${
+                appState.translations.formSelectPosition ||
+                "-- Select Position --"
+              }</option>
+              ${positionOptions}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${
+              appState.translations.formDepartment
+            } *</label>
+            <select id="department-${formId}" onchange="fetchApprover('${formId}', true)" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+              <option value="">${appState.translations.formSelectDept}</option>
+              ${departmentOptions}
+            </select>
+          </div>
+          ${
+            FORMS_REQUIRING_SUB_DEPT.includes(formId)
+              ? `
+            <div id="sub-department-container-${formId}" class="hidden">
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${
+                appState.translations.formSubDepartment || "ส่วนงานย่อย"
+              } *</label>
+              <select id="sub-department-${formId}" onchange="fetchApprover('${formId}')" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"></select>
+            </div>`
+              : ""
+          }
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${
+              appState.translations.formTelephone
+            }</label>
+            <input type="tel" id="tel-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="${
+      appState.translations.formPlaceholderTel
+    }">
+          </div>
+        </div>
+        <div id="approver-info-${formId}" class="mt-4 p-4 border-l-4 border-blue-400 bg-blue-50 hidden">
+          <p class="text-sm text-gray-600">${
+            appState.translations.formApproverInfo
+          }</p>
+          <p id="approver-name-display-${formId}" class="font-semibold text-gray-800"></p>
+        </div>
+      </div>`;
+  }
+
+  function renderFormShell(formId) {
+    hideAllViews();
+    const viewId = `form-view-${formId}`;
+    let container = document.getElementById(viewId);
+    if (!container) {
+      container = document.createElement("div");
+      container.id = viewId;
+      container.className = "view-content hidden";
+      document.getElementById("app-container").appendChild(container);
+    }
+    const formInfo = appState.translations.forms[formId];
+    const formConfig = FORM_CONFIG[formId];
+    const formType = `ISMS-FM-${formId} - ${formInfo.shortTitle}`;
+    const bodyHtml = formConfig.bodyRenderer
+      ? formConfig.bodyRenderer(formId)
+      : renderStandardDetailBody(formId);
+
+    container.innerHTML = `
+      <div class="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div class="mb-6">
+          <button onclick="showView('main-menu-view')" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+            <span class="mr-2">←</span> ${appState.translations.navHome}
+          </button>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+          <div class="${formConfig.gradientClass} px-4 py-6 sm:px-8">
+            <div class="flex items-center">
+              <div class="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center mr-4"><i class="${
+                formConfig.iconClass
+              } text-white text-2xl"></i></div>
+              <div>
+                <h2 class="text-2xl font-bold text-white">${formInfo.title}</h2>
+                <p class="text-blue-100 mt-1">${formInfo.subtitle}</p>
+              </div>
+            </div>
+          </div>
+          <form id="isms-fm-${formId}-form" class="p-4 md:p-8 space-y-6">
+            ${renderRequesterInfoSection(formId)}
+            ${bodyHtml}
+            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${
+                appState.translations.formAdditionalDetails
+              }</h3>
+              <div><textarea id="additional-details-${formId}" rows="3" class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="${
+      appState.translations.formPlaceholderAdditionalDetails
+    }"></textarea></div>
+            </div>
+            <div class="flex items-center justify-end space-x-4 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <button type="button" onclick="showView('main-menu-view')" class="px-6 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">${
+                appState.translations.cancel
+              }</button>
+              <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">${
+                appState.translations.btnSubmitRequest
+              }</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+
+    if (formConfig.addRowFunction) {
+      formConfig.addRowFunction();
+    }
+
+    document
+      .getElementById(`isms-fm-${formId}-form`)
+      .addEventListener("submit", (e) => handleFormSubmit(e, formType, formId));
+
+    document
+      .getElementById(`isms-fm-${formId}-form`)
+      .addEventListener("click", function (event) {
+        const actionButton = event.target.closest("[data-action]");
+        if (!actionButton) return;
+
+        const action = actionButton.dataset.action;
+        if (action === "remove-row") {
+          const rowToRemove = actionButton.closest(".dynamic-row");
+          if (rowToRemove) {
+            rowToRemove.remove();
+          }
+        }
+      });
+
+    container.classList.remove("hidden");
+  }
+
+  function renderForm(formId) {
+    renderFormShell(formId);
+  }
+
+  function addServerRow010() {
+    const container = document.getElementById(
+      FORM_CONFIG["010"].detailContainerId
+    );
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableServerName} *</label><input type="text" name="serverName" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableIpAddress}</label><input type="text" name="ipAddress" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableConnection}</label>
+          <div class="space-y-2 mt-2">
+            <label class="inline-flex items-center mr-4"><input type="checkbox" name="connection" value="RDP" class="form-checkbox h-4 w-4 text-blue-600"><span class="ml-2 text-sm text-gray-700 dark:text-slate-300">RDP</span></label>
+            <label class="inline-flex items-center mr-4"><input type="checkbox" name="connection" value="SSH" class="form-checkbox h-4 w-4 text-blue-600"><span class="ml-2 text-sm text-gray-700 dark:text-slate-300">SSH</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="connection" value="Other" class="form-checkbox h-4 w-4 text-blue-600" onchange="toggleOtherInput(this, 'connectionOther')"><span class="ml-2 text-sm text-gray-700 dark:text-slate-300">Other</span></label>
+          </div>
+          <input type="text" name="connectionOther" class="hidden mt-2 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="ระบุรายละเอียด">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tablePermission}</label>
+          <div class="space-y-2 mt-2">
+            <label class="inline-flex items-center mr-4"><input type="checkbox" name="permission" value="User" class="form-checkbox h-4 w-4 text-blue-600"><span class="ml-2 text-sm text-gray-700 dark:text-slate-300">User</span></label>
+            <label class="inline-flex items-center mr-4"><input type="checkbox" name="permission" value="Admin" class="form-checkbox h-4 w-4 text-blue-600"><span class="ml-2 text-sm text-gray-700 dark:text-slate-300">Admin</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="permission" value="Other" class="form-checkbox h-4 w-4 text-blue-600" onchange="toggleOtherInput(this, 'permissionOther')"><span class="ml-2 text-sm text-gray-700 dark:text-slate-300">Other</span></label>
+          </div>
+          <input type="text" name="permissionOther" class="hidden mt-2 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="ระบุรายละเอียด">
+        </div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function renderFormBody011(formId) {
+    return `
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formObjectiveLabel}</h3>
+        <div><textarea id="objective-${formId}" rows="3" required class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" placeholder="${appState.translations.formPlaceholderObjective}"></textarea></div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formSectionC}</h3>
+        <div class="flex flex-wrap gap-6">
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="add" required class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formAddPermission}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="change" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formChangePermission}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="remove" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formRemovePermission}</span></label>
+        </div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formSectionG}</h3>
+          <button type="button" onclick="addFirewallRuleRow011()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            <span class="mr-2">+</span> ${appState.translations.btnAddRule}
+          </button>
+        </div>
+        <div id="firewall-rules-container-011" class="space-y-4"></div>
+      </div>`;
+  }
+
+  function addFirewallRuleRow011() {
+    const container = document.getElementById("firewall-rules-container-011");
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableSourceIp} *</label><input type="text" name="sourceIp" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderIp}"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableDestIp} *</label><input type="text" name="destIp" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderIp}"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tablePort} *</label><input type="text" name="port" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderPort}"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableAction}</label><select name="action" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"><option value="Allow">${appState.translations.formActionAllow}</option><option value="Deny">${appState.translations.formActionDeny}</option></select></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 px-2 py-1 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash mr-1"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function addSoftwareRow012() {
+    const container = document.getElementById(
+      FORM_CONFIG["012"].detailContainerId
+    );
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableSoftwareName} *</label><input type="text" name="softwareName" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableVersion}</label><input type="text" name="version" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderSoftwareVersion}"></div>
+        <div class="md:col-span-3"><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableReason} *</label><textarea name="reason" rows="2" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderReason}"></textarea></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function renderFormBody013(formId) {
+    return `
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formDetails}</h3>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formObjective} *</label><textarea id="objective-${formId}" rows="3" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderObjective}"></textarea></div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">${appState.translations.formAccessDuration}</label>
+            <div class="flex items-center space-x-6">
+              <label class="inline-flex items-center"><input type="radio" name="duration-${formId}" value="Permanent" checked onchange="toggleEndDate('${formId}', false)" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formDurationPermanent}</span></label>
+              <label class="inline-flex items-center"><input type="radio" name="duration-${formId}" value="Temporary" onchange="toggleEndDate('${formId}', true)" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formDurationTemporary}</span></label>
+            </div>
+          </div>
+          <div id="end-date-container-${formId}" class="hidden">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formEndDate} *</label>
+            <input id="end-date-${formId}" type="date" class="mt-1 block w-full md:w-1/2 rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600">
+          </div>
+          <div class="pt-4">
+            <label class="flex items-start"><input type="checkbox" id="acknowledgement-${formId}" required class="form-checkbox h-5 w-5 text-blue-600 mt-1"><span class="ml-3 text-sm text-gray-700 dark:text-slate-300">${appState.translations.formAcknowledgement}</span></label>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderFormBody099(formId) {
+    return `
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formDetails}</h3>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formObjective} *</label><textarea id="objective-${formId}" rows="3" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderObjective}"></textarea></div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formStartDate} *</label><input id="start-date-${formId}" type="date" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formEndDate} *</label><input id="end-date-${formId}" type="date" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">${appState.translations.formHardware}</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="radio" name="hardware-${formId}" value="PC" class="form-radio h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formHardwarePC}</span></label>
+              <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="radio" name="hardware-${formId}" value="Notebook" checked class="form-radio h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formHardwareNotebook}</span></label>
+            </div>
+          </div>
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formRequiredSoftware}</label><textarea id="required-software-${formId}" rows="2" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderRequiredSoftware}"></textarea></div>
+        </div>
+      </div>`;
+  }
+
+  function renderFormBody100(formId) {
+    const departmentOptions = appState.availableDepartments
+      .map((dept) => `<option value="${dept}">${dept}</option>`)
+      .join("");
+    const positionOptions = appState.availablePositions
+      .map((pos) => `<option value="${pos}">${pos}</option>`)
+      .join("");
+    return `
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formSectionBRecipient}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formRecipientName} *</label><input type="text" id="recipient-name-${formId}" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderName}"></div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formRecipientPosition}</label>
+            <select id="recipient-position-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"><option value="">${appState.translations.formSelectPosition}</option>${positionOptions}</select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formRecipientDepartment}</label>
+            <select id="recipient-department-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"><option value="">${appState.translations.formSelectDept}</option>${departmentOptions}</select>
+          </div>
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formTelephone}</label><input type="tel" id="recipient-tel-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        </div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formSectionCItems}</h3>
+          <button type="button" onclick="addItemRow100()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"><span class="mr-2">+</span> ${appState.translations.btnAddItem}</button>
+        </div>
+        <div id="equipment-list-container-100" class="space-y-4"></div>
+      </div>`;
+  }
+
+  function addItemRow100() {
+    const container = document.getElementById("equipment-list-container-100");
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableItem} *</label><input type="text" name="item" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableSerialNumber}</label><input type="text" name="serialNumber" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableAssetCode}</label><input type="text" name="assetCode" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.detailNotes}</label><input type="text" name="notes" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function addAssetRow101() {
+    const container = document.getElementById("asset-disposal-container-101");
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableAssetType} *</label><input type="text" name="assetType" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableSerialNumber}</label><input type="text" name="serialNumber" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div class="md:col-span-3"><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableDisposalReason} *</label><textarea name="reason" rows="2" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></textarea></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function addMediaRow003() {
+    const container = document.getElementById(
+      FORM_CONFIG["003"].detailContainerId
+    );
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableMediaType} *</label><input type="text" name="mediaType" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableSerialNumber}</label><input type="text" name="serialNumber" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableMediaDescription}</label><input type="text" name="mediaDescription" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableDisposalMethod} *</label><input type="text" name="disposalMethod" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function renderFormBody025(formId) {
+    return `
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formNewEmployeeDetails}</h3>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeNameTh} *</label><input id="new-employee-name-th-${formId}" type="text" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeNameEn}</label><input id="new-employee-name-en-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeId}</label><input id="new-employee-id-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeePosition}</label><input id="new-employee-position-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeMobile}</label><input id="new-employee-mobile-${formId}" type="tel" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="08xxxxxxxx"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeType}</label><select id="employee-type-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"><option value="Permanent">${appState.translations.formEmployeeTypePermanent}</option><option value="Contract">${appState.translations.formEmployeeTypeContract}</option><option value="Intern">${appState.translations.formEmployeeTypeIntern}</option></select></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formSectionBranch}</label><input id="section-branch-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formStartDate} *</label><input id="start-date-${formId}" type="date" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formSectionITSetup}</h3>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="checkbox" id="it-computer-account-${formId}" class="form-checkbox h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formComputerAccount}</span></label>
+            <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="checkbox" id="it-email-account-${formId}" class="form-checkbox h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formEmailAccount}</span></label>
+            <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="checkbox" id="it-printer-scan-${formId}" class="form-checkbox h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formPrinterScan}</span></label>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">${appState.translations.formHardware}</label>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="radio" name="hardware-${formId}" value="PC" class="form-radio h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formHardwarePC}</span></label>
+              <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="radio" name="hardware-${formId}" value="Notebook" class="form-radio h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formHardwareNotebook}</span></label>
+              <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="radio" name="hardware-${formId}" value="None" checked class="form-radio h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formHardwareNone}</span></label>
+            </div>
+          </div>
+          <div class="mt-4 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700"><p class="font-bold">${appState.translations.formNoteTitle}</p><p>${appState.translations.formPurchaseNotice}</p></div>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formSectionAccessRights}</h3>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="checkbox" id="access-wifi-${formId}" class="form-checkbox h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formWifiAccess}</span></label>
+            <label class="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg border-2 border-gray-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all"><input type="checkbox" id="access-vpn-${formId}" class="form-checkbox h-5 w-5 text-blue-600"><span class="ml-3 font-medium text-gray-900 dark:text-slate-300">${appState.translations.formVpnAccess}</span></label>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formCCTicket}</h3>
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formEmail}</label>
+          <input type="text" id="cc-emails-${formId}" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderEmails}">
+        </div>
+      </div>`;
+  }
+
+  function renderFormBody026(formId) {
+    return `
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formUserInfo}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeNameTh} *</label><input id="user-name-th-${formId}" type="text" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeNameEn}</label><input id="user-name-en-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeeId}</label><input id="user-id-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+          <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formNewEmployeePosition}</label><input id="user-position-${formId}" type="text" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200 mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">${appState.translations.formRequestType}</h3>
+        <div class="flex flex-wrap gap-6">
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="New" required class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formNewUser}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="Change" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formChangePermission}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="Cancel" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formCancelUser}</span></label>
+        </div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formPermissionDetails}</h3>
+          <button type="button" onclick="addSapPermissionRow026()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"><span class="mr-2">+</span> ${appState.translations.btnAddPermission}</button>
+        </div>
+        <div id="sap-permission-container-026" class="space-y-4"></div>
+      </div>`;
+  }
+
+  function addSapPermissionRow026() {
+    const container = document.getElementById("sap-permission-container-026");
+    const uniqueId = Date.now();
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableModule} *</label><input type="text" name="module" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableTransactionCode} *</label><input type="text" name="transactionCode" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div class="md:col-span-2"><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableDescription}</label><input type="text" name="description" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div class="md:col-span-3">
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.tableAction}</label>
+          <div class="flex flex-wrap gap-4">
+            <label class="inline-flex items-center"><input type="radio" name="action-${uniqueId}" value="Add" required class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-sm dark:text-slate-300">${appState.translations.actionAdd}</span></label>
+            <label class="inline-flex items-center"><input type="radio" name="action-${uniqueId}" value="Change" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-sm dark:text-slate-300">${appState.translations.actionChange}</span></label>
+            <label class="inline-flex items-center"><input type="radio" name="action-${uniqueId}" value="Delete" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-sm dark:text-slate-300">${appState.translations.actionDelete}</span></label>
+          </div>
+        </div>
+        <div><button type="button" data-action="remove-row" class="w-full mt-2 px-2 py-2 text-red-600 dark:text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md text-sm inline-flex items-center justify-center"><i class="fas fa-trash mr-1"></i> ${appState.translations.btnRemove}</button></div>
+      </div>`;
+    container.appendChild(newRow);
+  }
+
+  function renderFormBody009(formId) {
+    return `
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formServiceRequestDetails}</h3>
+        <div class="flex flex-wrap gap-6">
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="Add" required class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formAddPermission}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="Change" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formChangePermission}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="request-type-${formId}" value="Cancel" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formCancelPermission}</span></label>
+        </div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formUserType}</h3>
+        <div class="flex flex-wrap gap-6">
+          <label class="inline-flex items-center"><input type="radio" name="user-type-${formId}" value="Staff" required class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formUserTypeStaff}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="user-type-${formId}" value="Outsource" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formUserTypeOutsource}</span></label>
+          <label class="inline-flex items-center"><input type="radio" name="user-type-${formId}" value="Vendor" class="form-radio h-4 w-4 text-blue-600"><span class="ml-2 text-gray-700 dark:text-slate-300">${appState.translations.formUserTypeVendor}</span></label>
+        </div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formSystemAccessDetails}</h3>
+          <button type="button" onclick="addApplicationRow009()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            <span class="mr-2">+</span> ${appState.translations.btnAddApplication}
+          </button>
+        </div>
+        <div id="application-access-container-009" class="space-y-4"></div>
+      </div>`;
+  }
+
+  function addApplicationRow009() {
+    const container = document.getElementById(
+      "application-access-container-009"
+    );
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formAppName} *</label><input type="text" name="appName" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div class="lg:col-span-2"><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formUsageDetails}</label><textarea name="usageDetails" rows="1" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></textarea></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formPermissionLevel}</label><input type="text" name="permissionLevel" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formEffectiveDate}</label><input type="date" name="effectiveDate" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  function renderFormBody014(formId) {
+    return `
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formObjectiveLabel}</h3>
+        <div><textarea id="objective-${formId}" rows="3" required class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600" placeholder="${appState.translations.formPlaceholderObjective}"></textarea></div>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-200">${appState.translations.formUserDetails}</h3>
+          <button type="button" onclick="addInternetAccessRow014()" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"><span class="mr-2">+</span> ${appState.translations.btnAddUser}</button>
+        </div>
+        <div id="internet-access-container-014" class="space-y-4"></div>
+      </div>`;
+  }
+
+  function addInternetAccessRow014() {
+    const container = document.getElementById("internet-access-container-014");
+    const newRow = document.createElement("div");
+    newRow.className =
+      "dynamic-row bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 hover:shadow-md transition-all";
+    newRow.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formRequesterName} *</label><input type="text" name="userName" required class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formPosition}</label><input type="text" name="userPosition" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+        <div class="md:col-span-3"><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.formAccessRights}</label>
+          <div class="flex space-x-4"><label class="inline-flex items-center"><input type="checkbox" name="accessInternet" class="form-checkbox h-4 w-4"><span class="ml-2 text-sm dark:text-slate-300">${appState.translations.formInternet}</span></label><label class="inline-flex items-center"><input type="checkbox" name="accessIntranet" class="form-checkbox h-4 w-4"><span class="ml-2 text-sm dark:text-slate-300">${appState.translations.formIntranet}</span></label></div>
+        </div>
+        <div class="md:col-span-3"><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${appState.translations.detailNotes}</label><input type="text" name="userNotes" class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>
+      </div>
+      <button type="button" data-action="remove-row" class="mt-2 text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-400 text-sm inline-flex items-center"><i class="fas fa-trash"></i> ${appState.translations.btnRemove}</button>`;
+    container.appendChild(newRow);
+  }
+
+  const formDetailCollectors = {
+    "003": () => ({
+      media: Array.from(
+        document.querySelectorAll("#media-details-container-003 > div")
+      ).map((row) => ({
+        mediaType: row.querySelector('[name="mediaType"]').value,
+        serialNumber: row.querySelector('[name="serialNumber"]').value,
+        description: row.querySelector('[name="mediaDescription"]').value,
+        disposalMethod: row.querySelector('[name="disposalMethod"]').value,
+      })),
+    }),
+    "010": () => ({
+      servers: Array.from(
+        document.querySelectorAll("#server-details-container-010 > div")
+      ).map((row) => ({
+        serverName: row.querySelector('[name="serverName"]').value,
+        ipAddress: row.querySelector('[name="ipAddress"]').value,
+        connection: Array.from(
+          row.querySelectorAll('[name="connection"]:checked')
+        ).map((cb) => {
+          if (cb.value === "Other") {
+            const otherValue = row.querySelector(
+              '[name="connectionOther"]'
+            ).value;
+            return otherValue ? `Other: ${otherValue}` : "Other";
+          }
+          return cb.value;
+        }),
+        permission: Array.from(
+          row.querySelectorAll('[name="permission"]:checked')
+        ).map((cb) => {
+          if (cb.value === "Other") {
+            const otherValue = row.querySelector(
+              '[name="permissionOther"]'
+            ).value;
+            return otherValue ? `Other: ${otherValue}` : "Other";
+          }
+          return cb.value;
+        }),
+      })),
+    }),
+    "011": () => ({
+      objective: document.getElementById("objective-011").value,
+      requestType:
+        document.querySelector('[name="request-type-011"]:checked')?.value ||
+        "N/A",
+      rules: Array.from(
+        document.querySelectorAll("#firewall-rules-container-011 > div")
+      ).map((row) => ({
+        sourceIp: row.querySelector('[name="sourceIp"]').value,
+        destIp: row.querySelector('[name="destIp"]').value,
+        port: row.querySelector('[name="port"]').value,
+        action: row.querySelector('[name="action"]').value,
+      })),
+    }),
+    "012": () => ({
+      software: Array.from(
+        document.querySelectorAll("#software-details-container-012 > div")
+      ).map((row) => ({
+        softwareName: row.querySelector('[name="softwareName"]').value,
+        version: row.querySelector('[name="version"]').value,
+        reason: row.querySelector('[name="reason"]').value,
+      })),
+    }),
+    "013": () => {
+      const details = {
+        objective: document.getElementById("objective-013").value,
+        duration: document.querySelector('input[name="duration-013"]:checked')
+          .value,
+        acknowledged: document.getElementById("acknowledgement-013").checked,
+      };
+      if (details.duration === "Temporary") {
+        details.endDate = document.getElementById("end-date-013").value;
+      }
+      return details;
+    },
+    "025": () => ({
+      sectionBranch: document.getElementById("section-branch-025").value,
+      startDate: document.getElementById("start-date-025").value,
+      newEmployeeNameTh: document.getElementById("new-employee-name-th-025")
+        .value,
+      newEmployeeNameEn: document.getElementById("new-employee-name-en-025")
+        .value,
+      newEmployeeId: document.getElementById("new-employee-id-025").value,
+      newEmployeePosition: document.getElementById("new-employee-position-025")
+        .value,
+      newEmployeeMobile: document.getElementById("new-employee-mobile-025")
+        .value,
+      employeeType: document.getElementById("employee-type-025").value,
+      itSetup: {
+        computerAccount: document.getElementById("it-computer-account-025")
+          .checked,
+        emailAccount: document.getElementById("it-email-account-025").checked,
+        printerScan: document.getElementById("it-printer-scan-025").checked,
+        hardware: document.querySelector('input[name="hardware-025"]:checked')
+          .value,
+      },
+      accessRights: {
+        wifi: document.getElementById("access-wifi-025").checked,
+        vpn: document.getElementById("access-vpn-025").checked,
+      },
+      ccEmails: document.getElementById("cc-emails-025").value,
+    }),
+    "026": () => ({
+      userInfo: {
+        nameTh: document.getElementById("user-name-th-026").value,
+        nameEn: document.getElementById("user-name-en-026").value,
+        id: document.getElementById("user-id-026").value,
+        position: document.getElementById("user-position-026").value,
+      },
+      requestType:
+        document.querySelector('input[name="request-type-026"]:checked')
+          ?.value || "N/A",
+      permissions: Array.from(
+        document.querySelectorAll("#sap-permission-container-026 > div")
+      ).map((row) => ({
+        module: row.querySelector('[name="module"]').value,
+        transactionCode: row.querySelector('[name="transactionCode"]').value,
+        description: row.querySelector('[name="description"]').value,
+        action:
+          row.querySelector('input[type="radio"]:checked')?.value || "N/A",
+      })),
+    }),
+    "009": () => ({
+      requestType:
+        document.querySelector('input[name="request-type-009"]:checked')
+          ?.value || "N/A",
+      userType:
+        document.querySelector('input[name="user-type-009"]:checked')?.value ||
+        "N/A",
+      applications: Array.from(
+        document.querySelectorAll("#application-access-container-009 > div")
+      ).map((row) => ({
+        appName: row.querySelector('[name="appName"]').value,
+        usageDetails: row.querySelector('[name="usageDetails"]').value,
+        permissionLevel: row.querySelector('[name="permissionLevel"]').value,
+        effectiveDate: row.querySelector('[name="effectiveDate"]').value,
+      })),
+    }),
+    "014": () => ({
+      objective: document.getElementById("objective-014").value,
+      users: Array.from(
+        document.querySelectorAll("#internet-access-container-014 > div")
+      ).map((row) => ({
+        name: row.querySelector('[name="userName"]').value,
+        position: row.querySelector('[name="userPosition"]').value,
+        internet: row.querySelector('[name="accessInternet"]').checked,
+        intranet: row.querySelector('[name="accessIntranet"]').checked,
+        notes: row.querySelector('[name="userNotes"]').value,
+      })),
+    }),
+    "099": () => ({
+      objective: document.getElementById("objective-099").value,
+      startDate: document.getElementById("start-date-099").value,
+      endDate: document.getElementById("end-date-099").value,
+      hardware:
+        document.querySelector('input[name="hardware-099"]:checked')?.value ||
+        "Notebook",
+      requiredSoftware: document.getElementById("required-software-099").value,
+    }),
+    100: () => ({
+      recipientInfo: {
+        name: document.getElementById("recipient-name-100").value,
+        position: document.getElementById("recipient-position-100").value,
+        department: document.getElementById("recipient-department-100").value,
+        tel: document.getElementById("recipient-tel-100").value,
+      },
+      equipment: Array.from(
+        document.querySelectorAll("#equipment-list-container-100 > div")
+      ).map((row) => ({
+        item: row.querySelector('[name="item"]').value,
+        serialNumber: row.querySelector('[name="serialNumber"]').value,
+        assetCode: row.querySelector('[name="assetCode"]').value,
+        notes: row.querySelector('[name="notes"]').value,
+      })),
+    }),
+    101: () => ({
+      assets: Array.from(
+        document.querySelectorAll("#asset-disposal-container-101 > div")
+      ).map((row) => ({
+        assetType: row.querySelector('[name="assetType"]').value,
+        serialNumber: row.querySelector('[name="serialNumber"]').value,
+        reason: row.querySelector('[name="reason"]').value,
+      })),
+    }),
+  };
+
+  const formValidators = {
+    "099": (formId) => {
+      const startDateInput = document.getElementById(`start-date-${formId}`);
+      const endDateInput = document.getElementById(`end-date-${formId}`);
+      endDateInput.classList.remove("ring-red-500", "ring-2");
+      const startDate = startDateInput.value;
+      const endDate = endDateInput.value;
+      if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+        showMessage(
+          appState.translations.validationEndDateBeforeStartDate ||
+            "End date cannot be earlier than start date.",
+          true
+        );
+        endDateInput.classList.add("ring-red-500", "ring-2");
+        endDateInput.focus();
+        return false;
+      }
+      return true;
+    },
+  };
+
+  function handleFormSubmit(e, formType, formId) {
+    e.preventDefault();
+    if (formValidators[formId] && !formValidators[formId](formId)) {
+      return;
+    }
+    let details = {
+      position: document.getElementById(`position-${formId}`)?.value || "",
+      tel: document.getElementById(`tel-${formId}`)?.value || "",
+      additionalDetails:
+        document
+          .getElementById(`additional-details-${formId}`)
+          ?.value?.trim() || "",
+    };
+    if (formDetailCollectors[formId]) {
+      const specificDetails = formDetailCollectors[formId]();
+      Object.assign(details, specificDetails);
+    }
+    const requestObject = {
+      formType: formType,
+      requesterName:
+        document.getElementById(`requester-name-${formId}`)?.value || "",
+      department: document.getElementById(`department-${formId}`)?.value || "",
+      subDepartment:
+        document.getElementById(`sub-department-${formId}`)?.value || "",
+      details: JSON.stringify(details),
+    };
+    const summaryContainer = document.getElementById("confirmation-summary");
+    const approverName = document.getElementById(
+      `approver-name-display-${formId}`
+    ).textContent;
+    summaryContainer.innerHTML = `
+      <div class="grid grid-cols-3 gap-2">
+        <strong class="col-span-1">${
+          appState.translations.summaryFor
+        }:</strong><span class="col-span-2">${formType}</span>
+        <strong class="col-span-1">${
+          appState.translations.summaryRequester
+        }:</strong><span class="col-span-2">${
+      requestObject.requesterName
+    }</span>
+        <strong class="col-span-1">${
+          appState.translations.summaryDepartment
+        }:</strong><span class="col-span-2">${requestObject.department}</span>
+        <strong class="col-span-1">${
+          appState.translations.summaryWillBeSentTo
+        }:</strong><span class="col-span-2 font-bold text-blue-600">${
+      approverName || "N/A"
+    }</span>
+      </div>`;
+    const confirmBtn = document.getElementById("modal-confirm-submission-btn");
+    confirmBtn.textContent = appState.translations.btnConfirmSubmit;
+    confirmBtn.onclick = () => {
+      closeSubmissionModal();
+      google.script.run
+        .withSuccessHandler(handleFormSuccess)
+        .withFailureHandler(handleError)
+        .submitRequest(requestObject, appState.currentLanguage);
+    };
+    document
+      .getElementById("submission-confirmation-modal")
+      .classList.remove("hidden");
+  }
+
+  function handleFormSuccess(response) {
+    if (response.status === "success") {
+      showMessage(response.message);
+      setTimeout(() => showView("main-menu-view"), 1500);
+    } else {
+      handleError(response);
+    }
+  }
+
+  function toggleEndDate(formId, show) {
+    const container = document.getElementById(`end-date-container-${formId}`);
+    const input = document.getElementById(`end-date-${formId}`);
+    if (show) {
+      container.classList.remove("hidden");
+      input.required = true;
+    } else {
+      container.classList.add("hidden");
+      input.required = false;
+      input.value = "";
+    }
+  }
+
+  function toggleOtherInput(checkbox, inputName) {
+    const parentDiv = checkbox.closest(".grid > div");
+    const input = parentDiv.querySelector(`[name="${inputName}"]`);
+    if (input) {
+      if (checkbox.checked) {
+        input.classList.remove("hidden");
+        input.required = true;
+      } else {
+        input.classList.add("hidden");
+        input.required = false;
+        input.value = "";
+      }
+    }
+  }
+
+  function fetchApprover(formId, departmentChanged = false) {
+    const departmentSelect = document.getElementById(`department-${formId}`);
+    const department = departmentSelect.value;
+    const subDepartmentContainer = document.getElementById(
+      `sub-department-container-${formId}`
+    );
+    const subDepartmentSelect = document.getElementById(
+      `sub-department-${formId}`
+    );
+    const approverInfoDiv = document.getElementById(`approver-info-${formId}`);
+    const approverNameDisplay = document.getElementById(
+      `approver-name-display-${formId}`
+    );
+    const form = document.getElementById(`isms-fm-${formId}-form`);
+    const submitButton = form
+      ? form.querySelector('button[type="submit"]')
+      : null;
+
+    if (!department) {
+      if (approverInfoDiv) approverInfoDiv.classList.add("hidden");
+      if (subDepartmentContainer)
+        subDepartmentContainer.classList.add("hidden");
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+      return;
+    }
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.classList.add("opacity-50", "cursor-not-allowed");
+    }
+
+    if (departmentChanged) {
+      if (
+        FORMS_REQUIRING_SUB_DEPT.includes(formId) &&
+        subDepartmentContainer &&
+        subDepartmentSelect
+      ) {
+        const subDepts = appState.availableSubDepartments[department];
+        subDepartmentContainer.classList.remove("hidden");
+        subDepartmentSelect.required = true;
+        subDepartmentSelect.value = "";
+        if (subDepts && subDepts.length > 0) {
+          subDepartmentSelect.innerHTML =
+            `<option value="">-- ${
+              appState.translations.formSelectSubDepartment ||
+              "เลือกส่วนงานย่อย"
+            } --</option>` +
+            subDepts
+              .map((sd) => `<option value="${sd}">${sd}</option>`)
+              .join("");
+        } else {
+          subDepartmentSelect.innerHTML = `<option value="">-- ${
+            appState.translations.noSubDepartment || "ไม่มีส่วนงานย่อย"
+          } --</option>`;
+        }
+      } else {
+        if (subDepartmentContainer)
+          subDepartmentContainer.classList.add("hidden");
+        if (subDepartmentSelect) subDepartmentSelect.required = false;
+      }
+    }
+
+    approverNameDisplay.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> ${appState.translations.loaderText}`;
+    approverInfoDiv.classList.remove("hidden");
+    approverInfoDiv.className =
+      "mt-4 p-4 border-l-4 border-gray-400 bg-gray-100 dark:bg-slate-700 dark:border-gray-500";
+
+    const subDepartment = subDepartmentSelect ? subDepartmentSelect.value : "";
+
+    google.script.run
+      .withSuccessHandler((approver) => {
+        if (approver && approver.name) {
+          approverNameDisplay.textContent = approver.name;
+          approverInfoDiv.className =
+            "mt-4 p-4 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500";
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.classList.remove("opacity-50", "cursor-not-allowed");
+          }
+        } else {
+          approverNameDisplay.textContent =
+            approver?.error || appState.translations.noApproverFound;
+          approverInfoDiv.className =
+            "mt-4 p-4 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-500";
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.classList.add("opacity-50", "cursor-not-allowed");
+          }
+        }
+      })
+      .withFailureHandler((err) => {
+        approverNameDisplay.textContent =
+          appState.translations.errorFetchingApprover;
+        approverInfoDiv.className =
+          "mt-4 p-4 border-l-4 border-red-400 bg-red-50";
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.classList.add("opacity-50", "cursor-not-allowed");
+        }
+        handleError(err);
+      })
+      .getApproverForDepartment(department, subDepartment);
+  }
+</script>

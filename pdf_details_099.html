@@ -1,0 +1,29 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const details = get(['details'], request) || {};
+?>
+<div class="section">
+  <h3 class="section-title">รายละเอียดในฟอร์ม (Form Details)</h3>
+  <table class="details-table">
+    <tr>
+      <th width="30%">วัตถุประสงค์ (Objective)</th>
+      <td><?= details.objective || '—' ?></td>
+    </tr>
+    <tr>
+      <th>วันที่เริ่มงาน (Start Date)</th>
+      <td><?= details.startDate || '—' ?></td>
+    </tr>
+    <tr>
+      <th>วันที่สิ้นสุด (End Date)</th>
+      <td><?= details.endDate || '—' ?></td>
+    </tr>
+    <tr>
+      <th>เครื่องคอมพิวเตอร์ (Hardware)</th>
+      <td><?= details.hardware || '—' ?></td>
+    </tr>
+    <tr>
+      <th>โปรแกรมที่ต้องการ (Required Software)</th>
+      <td><?= details.requiredSoftware || '—' ?></td>
+    </tr>
+  </table>
+</div>

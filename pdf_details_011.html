@@ -1,0 +1,46 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const details = get(['details'], request) || {};
+  const rules = details.rules || [];
+?>
+<div class="section">
+  <h3 class="section-title">รายละเอียดในฟอร์ม (Form Details)</h3>
+  <div class="subsection">
+    <table class="details-table">
+      <tr>
+        <th width="30%">วัตถุประสงค์ (Objective)</th>
+        <td><?= details.objective || '—' ?></td>
+      </tr>
+      <tr>
+        <th>ประเภทคำขอ (Request Type)</th>
+        <td><?= details.requestType || '—' ?></td>
+      </tr>
+    </table>
+  </div>
+
+  <? if (rules.length > 0) { ?>
+  <div class="subsection">
+    <h4 class="subsection-title">G: รายละเอียดเพิ่มเติม (Additional Details)</h4>
+    <table class="details-table">
+      <thead>
+        <tr>
+          <th>Source IP</th>
+          <th>Destination IP</th>
+          <th>พอร์ต/บริการ (Port/Service)</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <? for (var i = 0; i < rules.length; i++) { var rule = rules[i]; ?>
+        <tr>
+          <td><?= rule.sourceIp || '—' ?></td>
+          <td><?= rule.destIp || '—' ?></td>
+          <td><?= rule.port || '—' ?></td>
+          <td><?= rule.action || '—' ?></td>
+        </tr>
+        <? } ?>
+      </tbody>
+    </table>
+  </div>
+  <? } ?>
+</div>

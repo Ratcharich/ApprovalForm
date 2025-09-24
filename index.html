@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ระบบขออนุมัติ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+      };
+      // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+      if (
+        localStorage.getItem("color-theme") === "dark" ||
+        (!("color-theme" in localStorage) &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    </script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
+    />
+    <?!= include('styles'); ?>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap");
+
+      body,
+      html {
+        font-family: "Sarabun", sans-serif;
+        scroll-behavior: smooth;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .fade-in {
+        animation: fadeIn 0.3s ease-in;
+      }
+    </style>
+    <style>
+      /* Add this new style block for view transitions */
+      @keyframes fadeOut {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+
+      .view-fade-out {
+        animation: fadeOut 0.2s ease-in-out forwards;
+      }
+    </style>
+  </head>
+
+  <body class="bg-slate-100 dark:bg-slate-900 min-h-screen">
+    <!-- Main container -->
+    <div id="app-container" class="px-4 md:px-0 relative">
+      <!-- Header -->
+      <header
+        class="bg-white dark:bg-slate-800 dark:border-b dark:border-slate-700 shadow-sm sticky top-0 z-40"
+      >
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between h-16">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <h1
+                  class="text-xl font-bold text-slate-800 dark:text-slate-200"
+                  data-translate-key="appHeader"
+                >
+                  📋 ระบบขออนุมัติ
+                </h1>
+                <p
+                  id="user-info"
+                  class="text-xs text-slate-500 dark:text-slate-400"
+                  data-translate-key="loadingUser"
+                >
+                  Loading...
+                </p>
+              </div>
+            </div>
+            <!-- Desktop Menu -->
+            <div class="hidden md:flex items-center">
+              <nav id="main-nav" class="flex items-center space-x-1">
+                <button
+                  onclick="showView('main-menu-view')"
+                  class="nav-btn relative text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  data-translate-key="navHome"
+                >
+                  หน้าหลัก
+                </button>
+                <button
+                  id="nav-my-requests-btn"
+                  onclick="showView('my-requests-view')"
+                  class="nav-btn relative text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  <span data-translate-key="navMyRequests">คำขอของฉัน</span>
+                  <span
+                    id="nav-my-requests-badge"
+                    class="nav-badge hidden"
+                  ></span>
+                </button>
+                <button
+                  id="nav-approvals-btn"
+                  onclick="showView('approvals-view')"
+                  class="nav-btn relative text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  <span data-translate-key="navApprovals">อนุมัติ</span>
+                  <span
+                    id="nav-approvals-badge"
+                    class="nav-badge hidden"
+                  ></span>
+                </button>
+                <button
+                  id="nav-dashboard-btn"
+                  onclick="showView('admin-dashboard-view')"
+                  class="nav-btn hidden text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  data-translate-key="navDashboard"
+                >
+                  แดชบอร์ด
+                </button>
+                <button
+                  id="nav-manage-approvers-btn"
+                  onclick="showView('manage-approvers-view')"
+                  class="nav-btn hidden text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  data-translate-key="navManageApprovers"
+                >
+                  จัดการผู้อนุมัติ
+                </button>
+                <button
+                  id="nav-settings-btn"
+                  onclick="showView('settings-view')"
+                  class="nav-btn hidden text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  data-translate-key="navSettings"
+                >
+                  ตั้งค่า
+                </button>
+              </nav>
+              <div
+                class="flex items-center ml-4 border-l border-slate-200 dark:border-slate-700 pl-4 space-x-4"
+              >
+                <button
+                  id="theme-toggle"
+                  type="button"
+                  class="text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm p-2.5"
+                >
+                  <i
+                    id="theme-toggle-dark-icon"
+                    class="theme-toggle-dark-icon hidden fas fa-moon fa-lg"
+                  ></i>
+                  <i
+                    id="theme-toggle-light-icon"
+                    class="theme-toggle-light-icon hidden fas fa-sun fa-lg"
+                  ></i>
+                </button>
+                <button
+                  onclick="setLanguage('th')"
+                  class="lang-btn active"
+                  id="lang-btn-th"
+                >
+                  TH
+                </button>
+                <button
+                  onclick="setLanguage('en')"
+                  class="lang-btn"
+                  id="lang-btn-en"
+                >
+                  EN
+                </button>
+              </div>
+            </div>
+            <!-- Mobile menu button -->
+            <div class="md:hidden flex items-center">
+              <button
+                id="mobile-menu-button"
+                type="button"
+                class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+                aria-controls="mobile-menu"
+                aria-expanded="false"
+              >
+                <span class="sr-only">Open main menu</span>
+                <i class="fas fa-bars fa-lg"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Mobile menu, show/hide based on menu state. -->
+        <div
+          class="md:hidden hidden bg-white dark:bg-slate-800"
+          id="mobile-menu"
+        >
+          <div
+            class="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-b border-slate-200 dark:border-slate-700"
+          >
+            <a
+              href="#"
+              onclick="showViewAndCloseMenu(event, 'main-menu-view')"
+              class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+              data-translate-key="navHome"
+              >หน้าหลัก</a
+            >
+            <a
+              href="#"
+              onclick="showViewAndCloseMenu(event, 'my-requests-view')"
+              class="mobile-nav-link flex justify-between items-center px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+            >
+              <span data-translate-key="navMyRequests">คำขอของฉัน</span>
+              <span
+                id="mobile-nav-my-requests-badge"
+                class="nav-badge mobile hidden"
+              ></span>
+            </a>
+            <a
+              href="#"
+              onclick="showViewAndCloseMenu(event, 'approvals-view')"
+              class="mobile-nav-link flex justify-between items-center px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+            >
+              <span data-translate-key="navApprovals">อนุมัติ</span>
+              <span
+                id="mobile-nav-approvals-badge"
+                class="nav-badge mobile hidden"
+              ></span>
+            </a>
+            <a
+              href="#"
+              id="mobile-nav-dashboard-btn"
+              onclick="showViewAndCloseMenu(event, 'admin-dashboard-view')"
+              class="hidden mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+              data-translate-key="navDashboard"
+              >แดชบอร์ด</a
+            >
+            <a
+              href="#"
+              id="mobile-nav-manage-approvers-btn"
+              onclick="showViewAndCloseMenu(event, 'manage-approvers-view')"
+              class="hidden mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+              data-translate-key="navManageApprovers"
+              >จัดการผู้อนุมัติ</a
+            >
+            <a
+              href="#"
+              id="mobile-nav-settings-btn"
+              onclick="showViewAndCloseMenu(event, 'settings-view')"
+              class="hidden mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+              data-translate-key="navSettings"
+              >ตั้งค่า</a
+            >
+          </div>
+          <div
+            class="pt-4 pb-3 border-t border-slate-200 dark:border-slate-700"
+          >
+            <div class="flex items-center justify-center px-5 space-x-6">
+              <div>
+                <button
+                  id="mobile-theme-toggle"
+                  type="button"
+                  class="text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm p-2.5"
+                >
+                  <i
+                    id="mobile-theme-toggle-dark-icon"
+                    class="theme-toggle-dark-icon hidden fas fa-moon fa-lg"
+                  ></i>
+                  <i
+                    id="mobile-theme-toggle-light-icon"
+                    class="theme-toggle-light-icon hidden fas fa-sun fa-lg"
+                  ></i>
+                </button>
+              </div>
+              <button
+                onclick="setLanguageAndCloseMenu(event, 'th')"
+                class="lang-btn active"
+                id="mobile-lang-btn-th"
+              >
+                TH
+              </button>
+              <button
+                onclick="setLanguageAndCloseMenu(event, 'en')"
+                class="lang-btn"
+                id="mobile-lang-btn-en"
+              >
+                EN
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Toast Notification Container -->
+      <div
+        id="toast-container"
+        class="fixed top-5 left-0 right-0 flex flex-col items-center z-50 space-y-2 pointer-events-none"
+      >
+        <!-- Toasts will be injected here -->
+      </div>
+
+      <!-- Global Message/Alert Bar (Legacy, can be removed if not used) -->
+      <div
+        id="message-bar"
+        class="hidden p-4 my-4 mx-auto max-w-7xl text-sm rounded-lg"
+        role="alert"
+      >
+        <span id="message-bar-text"></span>
+      </div>
+
+      <!-- Main Menu View (Dashboard) -->
+      <div id="main-menu-view" class="view-content hidden">
+        <div class="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-12">
+            <h2
+              class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4"
+              data-translate-key="startNewRequest"
+            >
+              เริ่มต้นคำขอใหม่
+            </h2>
+            <p
+              class="text-lg text-slate-600 dark:text-slate-400"
+              data-translate-key="mainMenuSubtitle"
+            >
+              กรุณาเลือกประเภทการขออนุมัติที่ต้องการ
+            </p>
+          </div>
+
+          <div
+            id="main-menu-grid"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
+            <!-- Form selection buttons will be dynamically injected here by main.js.html -->
+          </div>
+        </div>
+      </div>
+
+      <!-- My Requests View -->
+      <div id="my-requests-view" class="view-content hidden">
+        <!-- Content will be rendered here -->
+      </div>
+
+      <!-- Request Detail View -->
+      <div id="request-detail-view" class="view-content hidden">
+        <!-- Content will be rendered here -->
+      </div>
+
+      <!-- Approvals View -->
+      <div id="approvals-view" class="view-content hidden">
+        <!-- Content will be rendered here -->
+      </div>
+
+      <!-- Admin Dashboard View -->
+      <div id="admin-dashboard-view" class="view-content hidden">
+        <!-- The loader will be placed inside the view's container by the render function -->
+      </div>
+
+      <!-- Global Content Loader -->
+      <div id="global-loader" class="view-content hidden">
+        <div class="flex justify-center items-center py-48">
+          <div
+            class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Manage Approvers View -->
+      <div id="manage-approvers-view" class="view-content hidden"></div>
+
+      <!-- Settings View -->
+      <div id="settings-view" class="view-content hidden"></div>
+    </div>
+
+    <!-- Approval Modal -->
+    <div
+      id="approval-modal"
+      class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50"
+    >
+      <div
+        class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-xl bg-white dark:bg-slate-800 dark:border-slate-700"
+      >
+        <div class="mt-3 text-center">
+          <h3
+            class="text-lg leading-6 font-medium text-gray-900 dark:text-slate-200"
+            id="modal-title"
+          >
+            ...
+          </h3>
+          <div class="mt-2 px-7 py-3">
+            <!-- This part will be shown for forwarding -->
+            <div id="forward-container" class="hidden mb-4 text-left">
+              <label
+                for="forward-approver-select"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                >ส่งต่อให้</label
+              >
+              <select
+                id="forward-approver-select"
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <option value="">กำลังโหลดรายชื่อ...</option>
+              </select>
+            </div>
+            <label
+              for="approval-notes"
+              class="block text-sm font-medium text-gray-700 dark:text-slate-300 text-left"
+              data-translate-key="modalNotesLabel"
+              >หมายเหตุ (ถ้ามี)</label
+            >
+            <textarea
+              id="approval-notes"
+              rows="3"
+              class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+            ></textarea>
+          </div>
+          <div class="items-center px-4 py-3">
+            <button id="modal-confirm-btn" class="w-full btn">Confirm</button>
+            <button
+              id="modal-cancel-btn"
+              onclick="closeApprovalActionModal()"
+              class="w-full mt-2 px-6 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium"
+              data-translate-key="cancel"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submission Confirmation Modal -->
+    <div
+      id="submission-confirmation-modal"
+      class="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black/70 overflow-y-auto h-full w-full hidden z-50"
+    >
+      <div
+        class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-xl bg-white dark:bg-slate-800 dark:border-slate-700"
+      >
+        <div class="mt-3">
+          <h3
+            id="confirmSubmissionTitle"
+            class="text-xl leading-6 font-medium text-gray-900 dark:text-slate-200 text-center"
+            data-translate-key="confirmSubmissionTitle"
+          >
+            ยืนยันการส่งคำขอ
+          </h3>
+          <div
+            id="confirmation-summary"
+            class="mt-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg space-y-3 text-sm text-gray-800 dark:text-slate-300 border dark:border-slate-600"
+          >
+            <!-- Summary will be injected here -->
+          </div>
+          <div class="items-center px-4 py-3 mt-4 space-y-2">
+            <button
+              id="modal-confirm-submission-btn"
+              class="w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            ></button>
+            <button
+              onclick="closeSubmissionModal()"
+              class="w-full px-6 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium"
+              data-translate-key="cancel"
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Approver Management Modal -->
+    <div
+      id="approver-management-modal"
+      class="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black/70 overflow-y-auto h-full w-full hidden z-50"
+    >
+      <div
+        class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-xl bg-white dark:bg-slate-800 dark:border-slate-700"
+      >
+        <div class="mt-3">
+          <h3
+            class="text-xl leading-6 font-medium text-gray-900 dark:text-slate-200 text-center"
+            id="approver-modal-title"
+          >
+            ...
+          </h3>
+          <form id="approver-form" class="mt-6 space-y-4">
+            <input type="hidden" id="approver-action-type" />
+            <input type="hidden" id="original-approver-email" />
+            <div>
+              <label
+                for="approver-department"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelDepartment"
+                >Department (optional)</label
+              >
+              <select
+                id="approver-department"
+                onchange="populateApproverSubDepartments()"
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <!-- Options will be populated by JavaScript -->
+              </select>
+            </div>
+            <div>
+              <label
+                for="approver-subdepartment"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelSubDepartment"
+                >Sub-Department (optional)</label
+              >
+              <select
+                id="approver-subdepartment"
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <!-- Options will be populated by JavaScript -->
+              </select>
+            </div>
+            <div>
+              <label
+                for="approver-name"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelApproverName"
+                >Approver Name *</label
+              >
+              <input
+                type="text"
+                id="approver-name"
+                required
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              />
+            </div>
+            <div>
+              <label
+                for="approver-position"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelPosition"
+                >Position</label
+              >
+              <select
+                id="approver-position"
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <!-- Options will be populated by JavaScript -->
+              </select>
+            </div>
+            <div>
+              <label
+                for="approver-email"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelApproverEmail"
+                >Approver Email *</label
+              >
+              <input
+                type="email"
+                id="approver-email"
+                required
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              />
+            </div>
+            <div>
+              <label
+                for="approver-level"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelLevel"
+                >Level *</label
+              >
+              <input
+                type="number"
+                id="approver-level"
+                required
+                min="1"
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              />
+            </div>
+            <div>
+              <label
+                for="approver-role"
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                data-translate-key="labelRole"
+                >Role *</label
+              >
+              <select
+                id="approver-role"
+                required
+                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <option value="Approver">Approver</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>
+            <div class="items-center px-4 py-3 mt-4 space-y-2">
+              <button
+                type="button"
+                onclick="saveApprover()"
+                class="w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                data-translate-key="btnSave"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onclick="closeApproverModal()"
+                class="w-full px-6 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium"
+                data-translate-key="cancel"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <?!= include('forms.js'); ?>
+    <?!= include('ui.js'); ?>
+    <?!= include('main.js'); ?>
+  </body>
+</html>

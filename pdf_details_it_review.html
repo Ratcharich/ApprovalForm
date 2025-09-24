@@ -1,0 +1,59 @@
+<?
+  const itReview = request.itReviewDetails || {};
+  if (Object.keys(itReview).length > 0) {
+?>
+<div class="section">
+  <h3 class="section-title">สำหรับเจ้าหน้าที่ IT (For IT Staff)</h3>
+
+  <!-- IT Reviewer Section -->
+  <div class="subsection">
+    <h4 class="subsection-title">1. IT Reviewer</h4>
+    <table class="details-table">
+      <tr>
+        <th width="30%">การประเมินความเสี่ยง (Risk Assessment)</th>
+        <td>
+          <?= itReview.riskAssessment || '—' ?>
+        </td>
+      </tr>
+      <tr>
+        <th>แนวทางป้องกันความเสี่ยง (Risk Mitigation)</th>
+        <td>
+          <?= itReview.riskMitigation || '—' ?>
+        </td>
+      </tr>
+      <tr>
+        <th>วันที่รับเรื่อง (Date Received)</th>
+        <td>
+          <?= itReview.dateReceived || '—' ?>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- IT Manager Section -->
+  <div class="subsection">
+    <h4 class="subsection-title">2. IT Manager</h4>
+    <table class="details-table">
+      <tr>
+        <th width="30%">ความเห็น ผจก.ส่วนงานฯ (Manager's Comment)</th>
+        <td class="detail-text">
+          <?= itReview.managerComment || '—' ?>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- IT Director Section -->
+  <div class="subsection">
+    <h4 class="subsection-title">3. IT Director</h4>
+    <table class="details-table">
+      <tr>
+        <th width="30%">ความเห็น ผอ.ฝ่ายฯ (Director's Comment)</th>
+        <td class="detail-text">
+          <?= itReview.directorComment || '—' ?>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+<? } ?>

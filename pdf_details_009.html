@@ -1,0 +1,46 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const details = get(['details'], request) || {};
+  const applications = details.applications || [];
+?>
+<div class="section">
+  <h3 class="section-title">รายละเอียดในฟอร์ม (Form Details)</h3>
+  <div class="subsection">
+    <table class="details-table">
+      <tr>
+        <th width="30%">ประเภทคำขอ (Request Type)</th>
+        <td><?= details.requestType || '—' ?></td>
+      </tr>
+      <tr>
+        <th>ประเภทผู้ขอใช้บริการ (Requester Type)</th>
+        <td><?= details.userType || '—' ?></td>
+      </tr>
+    </table>
+  </div>
+
+  <? if (applications.length > 0) { ?>
+  <div class="subsection">
+    <h4 class="subsection-title">D: ระบบที่ต้องการเข้าถึง (System to Access)</h4>
+    <table class="details-table">
+      <thead>
+        <tr>
+          <th>ชื่อระบบสารสนเทศ (Application Name)</th>
+          <th>รายละเอียดการใช้ระบบ (Usage Details)</th>
+          <th>ระดับสิทธิ์ (Permission Level)</th>
+          <th>วันที่มีผล (Effective Date)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <? for (var i = 0; i < applications.length; i++) { var app = applications[i]; ?>
+        <tr>
+          <td><?= app.appName || '—' ?></td>
+          <td><?= app.usageDetails || '—' ?></td>
+          <td><?= app.permissionLevel || '—' ?></td>
+          <td><?= app.effectiveDate || '—' ?></td>
+        </tr>
+        <? } ?>
+      </tbody>
+    </table>
+  </div>
+  <? } ?>
+</div>

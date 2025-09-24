@@ -1,0 +1,952 @@
+<script>
+  // --- GLOBAL STATE & CONFIG ---
+  const STATUS = {
+    ALL: "All",
+    PENDING: "Pending",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
+    FORWARDED: "Forwarded",
+    PENDING_IT: "Pending IT",
+    PENDING_IT_REVIEWER: "Pending IT Reviewer",
+    PENDING_IT_MANAGER: "Pending IT Manager",
+    PENDING_IT_DIRECTOR: "Pending IT Director",
+  };
+
+  const appState = {
+    currentUserEmail: "",
+    isCurrentUserAdmin: false,
+    currentUserRole: "User",
+    currentLanguage: "th",
+    allMyRequests: [],
+    activeMyRequestsFilter: STATUS.ALL,
+    myRequestsSearchTerm: "",
+    myRequestsSort: { key: "requestTimestamp", direction: "desc" }, // Default sort
+    myRequestsCount: 0,
+    approvalsCount: 0,
+    allApprovals: [],
+    activeApprovalsFilter: STATUS.PENDING,
+    approvalsSearchTerm: "",
+    approvalsSort: { key: "requestTimestamp", direction: "desc" }, // Default sort
+    allApproversData: [],
+    approversSearchTerm: "",
+    availablePositions: [],
+    availableDepartments: [],
+    availableSubDepartments: {},
+    itManagerEmail: "",
+    itDirectorEmail: "",
+    itReviewerEmail: "",
+    itReviewForms: [],
+    translations: {},
+    currentView: { id: null, state: null },
+    currentRequestData: null,
+    disabledForms: [],
+  };
+
+  let activeAsyncCalls = 0;
+
+  // Helper to promisify google.script.run for easier async/await usage
+  function runAsync(functionName, ...args) {
+    activeAsyncCalls++;
+    // If this is the first call, show the loader
+    if (activeAsyncCalls === 1) {
+      // Hide all other views and show the loader view
+      hideAllViews();
+      document.getElementById("global-loader").classList.remove("hidden");
+    }
+
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        [functionName](...args);
+    }).finally(() => {
+      activeAsyncCalls--;
+      // If all calls are finished, hide the loader.
+      // The function that called runAsync will be responsible for showing the correct content view.
+      if (activeAsyncCalls <= 0) {
+        activeAsyncCalls = 0; // Reset to 0 to prevent negative numbers
+        const loader = document.getElementById("global-loader");
+        if (loader) {
+          loader.classList.add("hidden");
+        }
+      }
+    });
+  }
+
+  // --- INITIALIZATION & CORE APP LOGIC ---
+  async function initializeApp(isReload = false) {
+    try {
+      const savedLang = localStorage.getItem("appLanguage") || "th";
+
+      // Fetch all initial data in parallel
+      const [
+        userData,
+        translationJson,
+        departments,
+        positions,
+        subDepartments,
+      ] = await Promise.all([
+        runAsync("getUserInitialData"), // Always fetch user data to ensure role is current
+        runAsync("getTranslations", savedLang),
+        appState.availableDepartments.length > 0
+          ? Promise.resolve(appState.availableDepartments)
+          : runAsync("getDepartments"),
+        appState.availablePositions.length > 0
+          ? Promise.resolve(appState.availablePositions)
+          : runAsync("getPositions"),
+        Object.keys(appState.availableSubDepartments).length > 0
+          ? Promise.resolve(appState.availableSubDepartments)
+          : runAsync("getSubDepartments"),
+      ]);
+
+      // --- Process fetched data ---
+      appState.currentUserEmail = userData.email;
+      appState.isCurrentUserAdmin = userData.isAdmin;
+      appState.currentUserRole = userData.role;
+      appState.currentLanguage = savedLang;
+      appState.myRequestsCount = userData.myRequestsCount;
+      appState.approvalsCount = userData.approvalsCount;
+      if (!isReload) {
+        appState.itManagerEmail = userData.itManagerEmail || "";
+        appState.disabledForms = userData.disabledForms || [];
+        appState.itDirectorEmail = userData.itDirectorEmail || "";
+        appState.itReviewerEmail = userData.itReviewerEmail || "";
+        appState.itReviewForms = userData.itReviewForms || [];
+        appState.availableDepartments = departments || [];
+        appState.availablePositions = positions || [];
+        appState.availableSubDepartments = subDepartments || {};
+      }
+
+      const cleanJsonString = translationJson.replace(/<pre>|<\/pre>/g, "");
+      appState.translations = JSON.parse(cleanJsonString);
+
+      // --- Update UI now that all data is available ---
+      applyTranslations(); // Apply all static translations
+      renderMainMenu(); // Render the main menu with form buttons
+      updateNavBadges(); // Show counts on nav buttons
+
+      // Always update user info and admin buttons after translations are applied.
+      const userText = appState.translations.loggedInAs || "Logged in as:";
+      const userRoleText = appState.currentUserRole;
+      document.getElementById(
+        "user-info"
+      ).textContent = `${userText} ${appState.currentUserEmail} (${userRoleText})`;
+
+      if (appState.isCurrentUserAdmin) {
+        document.getElementById("nav-dashboard-btn").classList.remove("hidden");
+        document
+          .getElementById("mobile-nav-dashboard-btn")
+          .classList.remove("hidden");
+        document
+          .getElementById("nav-manage-approvers-btn")
+          .classList.remove("hidden");
+        document
+          .getElementById("mobile-nav-manage-approvers-btn")
+          .classList.remove("hidden");
+        document.getElementById("nav-settings-btn").classList.remove("hidden");
+        document
+          .getElementById("mobile-nav-settings-btn")
+          .classList.remove("hidden");
+      }
+
+      const viewIdToShow = appState.currentView.id || "main-menu-view";
+      const stateToShow = appState.currentView.state;
+
+      if (isReload) {
+        showView(viewIdToShow, stateToShow, true);
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const page = urlParams.get("page");
+        showView(
+          page === "approvals"
+            ? "approvals-view"
+            : page === "my-requests"
+            ? "my-requests-view"
+            : "main-menu-view"
+        );
+      }
+    } catch (err) {
+      handleError(err);
+      document.getElementById("user-info").textContent =
+        appState.translations.errorLoadingUser ||
+        "Error loading application data.";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    initializeApp(false);
+    document
+      .getElementById("mobile-menu-button")
+      .addEventListener("click", () => {
+        const mobileMenu = document.getElementById("mobile-menu");
+        const isExpanded = mobileMenu.classList.toggle("hidden");
+        document
+          .getElementById("mobile-menu-button")
+          .setAttribute("aria-expanded", !isExpanded);
+      });
+
+    const themeToggleBtn = document.getElementById("theme-toggle");
+    const mobileThemeToggleBtn = document.getElementById("mobile-theme-toggle");
+
+    const updateIcons = () => {
+      const isDark = document.documentElement.classList.contains("dark");
+      document
+        .querySelectorAll(".theme-toggle-dark-icon")
+        .forEach((icon) => icon.classList.toggle("hidden", isDark));
+      document
+        .querySelectorAll(".theme-toggle-light-icon")
+        .forEach((icon) => icon.classList.toggle("hidden", !isDark));
+    };
+
+    const toggleTheme = () => {
+      const isDark = document.documentElement.classList.toggle("dark");
+      localStorage.setItem("color-theme", isDark ? "dark" : "light");
+      updateIcons();
+    };
+
+    updateIcons();
+    themeToggleBtn.addEventListener("click", toggleTheme);
+    mobileThemeToggleBtn.addEventListener("click", toggleTheme);
+  });
+
+  // --- VIEW LOADERS (Refactored from showView) ---
+
+  /**
+   * Loads and renders the "My Requests" view.
+   * Handles data fetching and re-rendering on language change.
+   * @param {boolean} isLanguageChange - True if the call is due to a language change.
+   */
+  async function loadMyRequestsView(isLanguageChange) {
+    try {
+      // If data exists and it's just a language change, re-render immediately.
+      if (isLanguageChange && appState.allMyRequests.length > 0) {
+        renderRequestListView({
+          containerId: "my-requests-view",
+          titleKey: "myRequestsTitle",
+          subtitleKey: "myRequestsSubtitle",
+          requests: appState.allMyRequests,
+          filterOptions: [
+            STATUS.ALL,
+            STATUS.PENDING,
+            STATUS.APPROVED,
+            STATUS.REJECTED,
+          ],
+          activeFilter: appState.activeMyRequestsFilter,
+          filterHandlerName: "applyMyRequestsFilter",
+          isApproverView: false,
+          sortState: appState.myRequestsSort,
+          searchTerm: appState.myRequestsSearchTerm,
+          searchViewType: "my-requests",
+        });
+        return;
+      }
+
+      // Otherwise, fetch fresh data from the server.
+      const response = await runAsync("getMyRequests");
+      appState.allMyRequests = response ? response.requests || [] : [];
+      appState.myRequestsCount = response ? response.total : 0;
+      updateNavBadges();
+      renderRequestListView({
+        containerId: "my-requests-view",
+        titleKey: "myRequestsTitle",
+        subtitleKey: "myRequestsSubtitle",
+        requests: appState.allMyRequests,
+        filterOptions: [
+          STATUS.ALL,
+          STATUS.PENDING,
+          STATUS.APPROVED,
+          STATUS.REJECTED,
+        ],
+        activeFilter: appState.activeMyRequestsFilter,
+        filterHandlerName: "applyMyRequestsFilter",
+        isApproverView: false,
+        sortState: appState.myRequestsSort,
+        searchTerm: appState.myRequestsSearchTerm,
+        searchViewType: "my-requests",
+      });
+    } catch (err) {
+      handleError(err);
+      // Optionally render an error state within the view container
+      document.getElementById(
+        "my-requests-view"
+      ).innerHTML = `<p class="text-center text-red-500 p-8">${appState.translations.errorLoadingData}</p>`;
+    }
+  }
+
+  /**
+   * Loads and renders the "Approvals" view.
+   * @param {boolean} isLanguageChange - True if the call is due to a language change.
+   */
+  async function loadApprovalsView(isLanguageChange) {
+    try {
+      if (isLanguageChange && appState.allApprovals.length > 0) {
+        renderRequestListView({
+          containerId: "approvals-view",
+          titleKey: "approvalsTitle",
+          subtitleKey: "approvalsSubtitle",
+          requests: appState.allApprovals,
+          filterOptions: [
+            STATUS.PENDING,
+            STATUS.PENDING_IT_REVIEWER,
+            STATUS.PENDING_IT_MANAGER,
+            STATUS.PENDING_IT_DIRECTOR,
+            STATUS.APPROVED,
+            STATUS.REJECTED,
+          ],
+          activeFilter: appState.activeApprovalsFilter,
+          sortState: appState.approvalsSort,
+          isApproverView: true,
+          filterHandlerName: "applyApprovalsFilter",
+          searchTerm: appState.approvalsSearchTerm,
+          searchViewType: "approvals",
+        });
+        return;
+      }
+
+      const requests = await runAsync("getApprovals");
+      appState.allApprovals = requests || [];
+      const pendingStatuses = [
+        STATUS.PENDING,
+        STATUS.PENDING_IT,
+        STATUS.PENDING_IT_REVIEWER,
+        STATUS.PENDING_IT_MANAGER,
+        STATUS.PENDING_IT_DIRECTOR,
+      ];
+      appState.approvalsCount = appState.allApprovals.filter((r) =>
+        pendingStatuses.includes(r.status)
+      ).length;
+      updateNavBadges();
+      renderRequestListView({
+        containerId: "approvals-view",
+        titleKey: "approvalsTitle",
+        subtitleKey: "approvalsSubtitle",
+        requests: appState.allApprovals,
+        filterOptions: [
+          STATUS.PENDING,
+          STATUS.PENDING_IT_REVIEWER,
+          STATUS.PENDING_IT_MANAGER,
+          STATUS.PENDING_IT_DIRECTOR,
+          STATUS.APPROVED,
+          STATUS.REJECTED,
+        ],
+        activeFilter: appState.activeApprovalsFilter,
+        filterHandlerName: "applyApprovalsFilter",
+        isApproverView: true,
+        searchTerm: appState.approvalsSearchTerm,
+        searchViewType: "approvals",
+        sortState: appState.approvalsSort,
+      });
+    } catch (err) {
+      handleError(err);
+      document.getElementById(
+        "approvals-view"
+      ).innerHTML = `<p class="text-center text-red-500 p-8">${appState.translations.errorLoadingData}</p>`;
+    }
+  }
+
+  /**
+   * Loads and renders the "Admin Dashboard" view.
+   * @param {boolean} isLanguageChange - True if the call is due to a language change.
+   */
+  async function loadAdminDashboardView(isLanguageChange) {
+    try {
+      if (isLanguageChange && appState.dashboardStats) {
+        renderAdminDashboardView(appState.dashboardStats);
+        return;
+      }
+      const stats = await runAsync("getDashboardStats");
+      appState.dashboardStats = stats;
+      renderAdminDashboardView(stats);
+    } catch (err) {
+      handleError(err);
+      document.getElementById(
+        "admin-dashboard-view"
+      ).innerHTML = `<p class="text-center text-red-500 p-8">${appState.translations.errorLoadingData}</p>`;
+    }
+  }
+
+  /**
+   * Loads and renders the "Manage Approvers" view.
+   * @param {boolean} isLanguageChange - True if the call is due to a language change.
+   */
+  async function loadManageApproversView(isLanguageChange) {
+    try {
+      if (isLanguageChange && appState.allApproversData.length > 0) {
+        renderManageApproversView({
+          approvers: appState.allApproversData,
+          searchTerm: appState.approversSearchTerm,
+        });
+        return;
+      }
+
+      const approvers = await runAsync("getApprovers");
+      appState.allApproversData = approvers || [];
+      renderManageApproversView({
+        approvers: appState.allApproversData,
+        searchTerm: appState.approversSearchTerm,
+      });
+    } catch (err) {
+      handleError(err);
+      document.getElementById(
+        "manage-approvers-view"
+      ).innerHTML = `<p class="text-center text-red-500 p-8">${appState.translations.errorLoadingData}</p>`;
+    }
+  }
+
+  /**
+   * Loads and renders the "Request Detail" view.
+   * @param {object} state - The state object containing requestId and isApprover.
+   * @param {boolean} isLanguageChange - True if the call is due to a language change.
+   */
+  async function loadRequestDetailView(state, isLanguageChange) {
+    const fallbackView = state.isApprover
+      ? "approvals-view"
+      : "my-requests-view";
+
+    try {
+      // If data is cached and it's a language change, just re-render.
+      if (
+        isLanguageChange &&
+        appState.currentRequestData &&
+        appState.currentRequestData.requestId === state.requestId
+      ) {
+        renderRequestDetails(appState.currentRequestData, state.isApprover);
+        return;
+      }
+
+      const apiCall = state.isApprover
+        ? "getRequestByIdForApprover"
+        : "getRequestById";
+      const req = await runAsync(apiCall, state.requestId);
+
+      if (req) {
+        appState.currentRequestData = req;
+        renderRequestDetails(req, state.isApprover);
+      } else {
+        appState.currentRequestData = null;
+        showMessage(appState.translations.errorLoadingRequest, true);
+        showView(fallbackView);
+      }
+    } catch (error) {
+      appState.currentRequestData = null;
+      console.error("Error loading request:", error);
+      showMessage(appState.translations.errorLoadingRequest, true);
+      showView(fallbackView);
+    }
+  }
+
+  /**
+   * Loads and renders the "Settings" view for admins.
+   */
+  async function loadSettingsView() {
+    document.getElementById("settings-view").classList.add("fade-in");
+
+    try {
+      const response = await runAsync("getAdminSettings");
+      if (response.success) {
+        renderSettingsView(response.data);
+      } else {
+        handleError(response);
+      }
+    } catch (err) {
+      handleError(err);
+    }
+  }
+
+  // --- NAVIGATION AND VIEW HANDLING ---
+  function showView(viewId, state, isLanguageChange = false) {
+    const previousViewId = appState.currentView.id;
+    const newViewId = viewId;
+
+    // Permission checks
+    if (viewId === "manage-approvers-view" && !appState.isCurrentUserAdmin) {
+      showMessage("You do not have permission to access this page.", true);
+      showView("main-menu-view");
+      return;
+    }
+    if (viewId === "admin-dashboard-view" && !appState.isCurrentUserAdmin) {
+      showMessage("You do not have permission to access this page.", true);
+      showView("main-menu-view");
+      return;
+    }
+    if (viewId === "settings-view" && !appState.isCurrentUserAdmin) {
+      showMessage("You do not have permission to access this page.", true);
+      showView("main-menu-view");
+      return;
+    }
+
+    // Don't re-animate if it's the same view
+    if (previousViewId === newViewId && !isLanguageChange) return;
+
+    const previousViewElement = previousViewId
+      ? document.getElementById(previousViewId)
+      : null;
+    const newViewElement = document.getElementById(newViewId);
+
+    if (!newViewElement) {
+      console.error(`View with ID ${newViewId} not found.`);
+      return;
+    }
+
+    const animationDuration = 200; // ms, should match CSS
+
+    const loadNewView = () => {
+      if (newViewId !== "request-detail-view") {
+        appState.currentRequestData = null;
+      }
+      appState.currentView = { id: newViewId, state: state };
+      updateActiveNavButton(newViewId);
+
+      // Show the new view container
+      newViewElement.classList.remove("hidden");
+
+      // Use a switch statement for cleaner routing to the new loader functions
+      switch (newViewId) {
+        case "my-requests-view":
+          loadMyRequestsView(isLanguageChange);
+          break;
+        case "approvals-view":
+          loadApprovalsView(isLanguageChange);
+          break;
+        case "admin-dashboard-view":
+          loadAdminDashboardView(isLanguageChange);
+          break;
+        case "manage-approvers-view":
+          loadManageApproversView(isLanguageChange);
+          break;
+        case "request-detail-view":
+          if (state && state.requestId) {
+            loadRequestDetailView(state, isLanguageChange);
+          } else {
+            showView("main-menu-view"); // Fallback
+          }
+          break;
+        case "settings-view":
+          loadSettingsView();
+          break;
+        case "main-menu-view":
+        default:
+          // For simple views, just add the fade-in class
+          newViewElement.classList.add("fade-in");
+          break;
+      }
+    };
+
+    // If there's a previous view, fade it out first
+    if (previousViewElement && previousViewElement !== newViewElement) {
+      previousViewElement.classList.add("view-fade-out");
+      setTimeout(() => {
+        previousViewElement.classList.add("hidden");
+        previousViewElement.classList.remove("view-fade-out");
+        loadNewView();
+      }, animationDuration);
+    } else {
+      // If no previous view, just load the new one
+      hideAllViews();
+      loadNewView();
+    }
+  }
+
+  function hideAllViews() {
+    document.querySelectorAll(".view-content").forEach((view) => {
+      view.classList.add("hidden");
+    });
+  }
+
+  /**
+   * Collects data from the settings form and saves it.
+   */
+  async function saveSettings() {
+    const itReviewForms = Array.from(
+      document.querySelectorAll(".it-review-form-toggle:checked")
+    ).map((cb) => cb.value);
+
+    const itReviewFlows = Array.from(
+      document.querySelectorAll(".it-review-row")
+    ).map((row) => {
+      return {
+        formId: row.dataset.formId,
+        reviewerEmail: row.querySelector('[name="reviewerEmail"]').value,
+        managerEmail: row.querySelector('[name="managerEmail"]').value,
+        directorEmail: row.querySelector('[name="directorEmail"]').value,
+      };
+    });
+
+    const settingsToUpdate = {
+      helpdeskEmail: document.getElementById("setting-helpdesk-email").value,
+      itReviewerEmail: document.getElementById("setting-it-reviewer-email")
+        .value,
+      backupFolderId: document.getElementById("setting-backup-folder-id").value,
+      disabledForms: Array.from(
+        document.querySelectorAll(".form-toggle-switch")
+      )
+        .filter((toggle) => !toggle.checked)
+        .map((toggle) => toggle.value),
+      itReviewForms: itReviewForms,
+      itReviewFlows: itReviewFlows,
+    };
+
+    // --- Show confirmation modal ---
+    const modal = document.getElementById("submission-confirmation-modal");
+    const titleEl = document.getElementById("confirmSubmissionTitle");
+    const summaryEl = document.getElementById("confirmation-summary");
+    const confirmBtn = document.getElementById("modal-confirm-submission-btn");
+
+    titleEl.textContent =
+      appState.translations.confirmSettingsSaveTitle ||
+      "Confirm Settings Change";
+    summaryEl.innerHTML = `<p class="text-center">${
+      appState.translations.confirmSettingsSaveMsg ||
+      "Are you sure you want to save these changes?"
+    }</p>`;
+
+    confirmBtn.textContent = appState.translations.btnSave || "Save";
+    confirmBtn.onclick = () => executeSaveSettings(settingsToUpdate);
+
+    modal.classList.remove("hidden");
+  }
+
+  /**
+   * Executes the actual saving of settings after confirmation.
+   * @param {Object} settingsToUpdate The settings object to save.
+   */
+  async function executeSaveSettings(settingsToUpdate) {
+    closeSubmissionModal(); // Close the confirmation modal first
+
+    try {
+      const response = await runAsync("updateAdminSettings", settingsToUpdate);
+      if (response.success) {
+        showMessage(response.message);
+        // Update local state and re-render main menu
+        appState.disabledForms = settingsToUpdate.disabledForms;
+        renderMainMenu();
+      } else {
+        // The backend now returns structured errors
+        showMessage(response.message, true);
+      }
+    } catch (err) {
+      handleError(err);
+    }
+  }
+
+  // --- SEARCH HANDLING ---
+  // Must be on the window object to be called from oninput attribute
+  window.handleSearch = function (viewType) {
+    const searchTerm = document.getElementById(
+      `${viewType}-search-input`
+    ).value;
+    if (viewType === "my-requests") {
+      appState.myRequestsSearchTerm = searchTerm;
+      // Re-render the view. The filter function will use the new search term from appState.
+      applyMyRequestsFilter(appState.activeMyRequestsFilter);
+    } else if (viewType === "approvals") {
+      appState.approvalsSearchTerm = searchTerm;
+      // Re-render the view. The filter function will use the new search term from appState.
+      applyApprovalsFilter(appState.activeApprovalsFilter);
+    } else if (viewType === "manage-approvers") {
+      appState.approversSearchTerm = searchTerm;
+      applyApproversSearch();
+    }
+  };
+
+  window.handleSearchKeyDown = function (event, viewType) {
+    if (event.key === "Enter") {
+      event.preventDefault(); // Prevent form submission if it's inside a form
+      clearTimeout(debounceTimer); // Clear any pending debounced search
+      window.handleSearch(viewType); // Trigger search immediately
+    }
+  };
+
+  // --- DEBOUNCE UTILITY ---
+  let debounceTimer;
+  /**
+   * Debounces a function to limit the rate at which it gets called.
+   * @param {function} func The function to debounce.
+   * @param {number} delay The delay in milliseconds.
+   * @returns {function} The new debounced function.
+   */
+  function debounce(func, delay) {
+    return function (...args) {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => func.apply(this, args), delay);
+    };
+  }
+
+  // Create a debounced version of the search handler with a 400ms delay
+  window.debouncedSearch = debounce(window.handleSearch, 400);
+
+  // --- FILTERING ---
+  function applySort(viewType, sortKey) {
+    let sortState;
+    let filterFunction;
+
+    if (viewType === "my-requests") {
+      sortState = appState.myRequestsSort;
+      filterFunction = () =>
+        applyMyRequestsFilter(appState.activeMyRequestsFilter);
+    } else if (viewType === "approvals") {
+      sortState = appState.approvalsSort;
+      filterFunction = () =>
+        applyApprovalsFilter(appState.activeApprovalsFilter);
+    } else {
+      return;
+    }
+
+    if (sortState.key === sortKey) {
+      sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+    } else {
+      sortState.key = sortKey;
+      sortState.direction = "desc";
+    }
+    filterFunction();
+  }
+  function applyMyRequestsFilter(status) {
+    appState.activeMyRequestsFilter = status;
+    // Re-render the view with the new filter, using the already fetched data
+    renderRequestListView({
+      containerId: "my-requests-view",
+      titleKey: "myRequestsTitle",
+      subtitleKey: "myRequestsSubtitle",
+      requests: appState.allMyRequests,
+      filterOptions: [
+        STATUS.ALL,
+        STATUS.PENDING,
+        STATUS.APPROVED,
+        STATUS.REJECTED,
+      ],
+      activeFilter: appState.activeMyRequestsFilter,
+      filterHandlerName: "applyMyRequestsFilter",
+      isApproverView: false,
+      sortState: appState.myRequestsSort,
+      searchTerm: appState.myRequestsSearchTerm,
+      searchViewType: "my-requests",
+    });
+  }
+
+  function applyApprovalsFilter(status) {
+    appState.activeApprovalsFilter = status;
+    // Re-render the view with the new filter, using the already fetched data
+    renderRequestListView({
+      containerId: "approvals-view",
+      titleKey: "approvalsTitle",
+      subtitleKey: "approvalsSubtitle",
+      requests: appState.allApprovals,
+      filterOptions: [
+        STATUS.PENDING,
+        STATUS.PENDING_IT_REVIEWER,
+        STATUS.PENDING_IT_MANAGER,
+        STATUS.PENDING_IT_DIRECTOR,
+        STATUS.APPROVED,
+        STATUS.REJECTED,
+      ],
+      activeFilter: appState.activeApprovalsFilter,
+      filterHandlerName: "applyApprovalsFilter",
+      isApproverView: true,
+      sortState: appState.approvalsSort,
+      searchTerm: appState.approvalsSearchTerm,
+      searchViewType: "approvals",
+    });
+  }
+
+  function applyApproversSearch() {
+    // Re-render the manage approvers view with the new search term
+    renderManageApproversView({
+      approvers: appState.allApproversData,
+      searchTerm: appState.approversSearchTerm,
+    });
+  }
+
+  // --- LOADER & MESSAGE ---
+  function showMessage(msg, isError = false) {
+    const container = document.getElementById("toast-container");
+    const toastId = "toast-" + Date.now();
+    const toast = document.createElement("div");
+    toast.id = toastId;
+
+    const icon = isError
+      ? '<i class="fas fa-times-circle text-red-500"></i>'
+      : '<i class="fas fa-check-circle text-green-500"></i>';
+
+    toast.className = `max-w-lg w-full bg-white dark:bg-slate-800 shadow-lg rounded-lg pointer-events-auto ring-1 ring-black dark:ring-white/10 ring-opacity-5 overflow-hidden toast-in`;
+    toast.innerHTML = `
+            <div class="p-4">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">${icon}</div>
+                    <div class="ml-3 w-0 flex-1 pt-0.5">
+                        <p class="text-sm font-medium text-gray-900 dark:text-slate-200">${
+                          isError
+                            ? appState.translations.errorGeneric || "Error"
+                            : appState.translations.successTitle || "Success"
+                        }</p>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">${msg}</p>
+                    </div>
+                    <div class="ml-4 flex-shrink-0 flex">
+                        <button onclick="document.getElementById('${toastId}').remove()" class="bg-white dark:bg-transparent rounded-md inline-flex text-gray-400 hover:text-gray-500 dark:text-slate-400 dark:hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            <span class="sr-only">Close</span><i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      const el = document.getElementById(toastId);
+      if (el) {
+        el.classList.remove("toast-in");
+        el.classList.add("toast-out");
+        setTimeout(() => el.remove(), 300);
+      }
+    }, 5000);
+  }
+  function handleError(err) {
+    // Log the detailed technical error for debugging
+    console.error("A client-side error occurred:", err);
+
+    // Get a user-friendly message from translations
+    const userFriendlyMessage =
+      appState.translations.errorUserFriendly ||
+      "An unexpected error occurred. Please try again.";
+
+    // Show the user-friendly message
+    showMessage(userFriendlyMessage, true);
+  }
+
+  // --- LANGUAGE HANDLING ---
+  function setLanguage(lang) {
+    // 1. Prevent re-rendering if the language is already the same.
+    if (lang === appState.currentLanguage) {
+      return;
+    }
+
+    // Find the currently visible view to apply the fade-out animation
+    const viewToFade = document.getElementById(appState.currentView.id);
+
+    if (viewToFade) {
+      // 2. Add a transition style and fade the container out.
+      viewToFade.style.transition = "opacity 0.2s ease-in-out";
+      viewToFade.style.opacity = 0;
+    }
+
+    // 3. Wait for the fade-out animation to complete.
+    setTimeout(() => {
+      localStorage.setItem("appLanguage", lang);
+      initializeApp(true); // initializeApp will handle showing the new view with its own animation
+    }, 200); // This duration should match the transition duration.
+  }
+
+  function applyTranslations() {
+    document.querySelectorAll("[data-translate-key]").forEach((el) => {
+      const key = el.dataset.translateKey;
+      const translation = appState.translations[key];
+      if (translation === undefined) {
+        console.warn(`Translation key not found: ${key}`);
+        return;
+      }
+      if (
+        el.placeholder !== undefined &&
+        el.tagName.toLowerCase() !== "button"
+      ) {
+        el.placeholder = translation;
+      } else {
+        el.textContent = translation;
+      }
+    });
+    document.querySelectorAll("[data-form-id]").forEach((el) => {
+      const formId = el.dataset.formId;
+      const prop = el.dataset.translateProp;
+
+      // If data-translate-prop is missing, this element is likely using data-form-id
+      // for another purpose (like in the settings page). Skip it to avoid warnings.
+      if (prop === undefined) {
+        return;
+      }
+
+      if (
+        appState.translations.forms &&
+        appState.translations.forms[formId] &&
+        appState.translations.forms[formId][prop]
+      ) {
+        el.textContent = appState.translations.forms[formId][prop];
+      } else {
+        console.warn(
+          `Form translation not found for id: ${formId}, prop: ${prop}`
+        );
+      }
+    });
+
+    document
+      .querySelectorAll(".lang-btn")
+      .forEach((btn) => btn.classList.remove("active"));
+    const desktopBtn = document.getElementById(
+      `lang-btn-${appState.currentLanguage}`
+    );
+    if (desktopBtn) desktopBtn.classList.add("active");
+    const mobileBtn = document.getElementById(
+      `mobile-lang-btn-${appState.currentLanguage}`
+    );
+    if (mobileBtn) mobileBtn.classList.add("active");
+  }
+
+  function updateActiveNavButton(activeViewId) {
+    const navMapping = {
+      "main-menu-view": "nav-home-btn",
+      "my-requests-view": "nav-my-requests-btn",
+      "approvals-view": "nav-approvals-btn",
+      "admin-dashboard-view": "nav-dashboard-btn",
+      // Map manage-approvers to its own button
+      "settings-view": "nav-settings-btn",
+      "manage-approvers-view": "nav-manage-approvers-btn",
+      // Forms and detail views can be mapped to their parent nav item
+      "request-detail-view": appState.currentView.state?.isApprover
+        ? "nav-approvals-btn"
+        : "nav-my-requests-btn",
+    };
+    // Add form views to mapping
+    Object.keys(FORM_CONFIG).forEach((formId) => {
+      navMapping[`form-isms-fm-${formId}-view`] = "nav-home-btn";
+    });
+
+    document
+      .querySelectorAll(".nav-btn")
+      .forEach((btn) => btn.classList.remove("active"));
+    const activeNavId = navMapping[activeViewId] || "nav-home-btn";
+    document.getElementById(activeNavId)?.classList.add("active");
+  }
+
+  function updateNavBadges() {
+    const myRequestsBadge = document.getElementById("nav-my-requests-badge");
+    const mobileMyRequestsBadge = document.getElementById(
+      "mobile-nav-my-requests-badge"
+    );
+    const approvalsBadge = document.getElementById("nav-approvals-badge");
+    const mobileApprovalsBadge = document.getElementById(
+      "mobile-nav-approvals-badge"
+    );
+
+    [myRequestsBadge, mobileMyRequestsBadge].forEach((badge) => {
+      badge.textContent = appState.myRequestsCount;
+      badge.classList.toggle("hidden", appState.myRequestsCount === 0);
+    });
+
+    [approvalsBadge, mobileApprovalsBadge].forEach((badge) => {
+      badge.textContent = appState.approvalsCount;
+      badge.classList.toggle("hidden", appState.approvalsCount === 0);
+    });
+  }
+
+  function showViewAndCloseMenu(event, viewId, state) {
+    event.preventDefault();
+    showView(viewId, state);
+    const mobileMenu = document.getElementById("mobile-menu");
+    mobileMenu.classList.add("hidden");
+    document
+      .getElementById("mobile-menu-button")
+      .setAttribute("aria-expanded", "false");
+  }
+
+  function setLanguageAndCloseMenu(event, lang) {
+    event.preventDefault();
+    setLanguage(lang);
+  }
+</script>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+  </style>
+</head>
+
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Sarabun', sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"
+          style="max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+          <!-- Header -->
+          <tr>
+            <td align="center"
+              style="padding: 20px; background-color: #3b82f6; color: #ffffff; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: bold;">📋 Approval System</h1>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding: 30px 25px;">
+              <h2 style="margin: 0 0 15px 0; font-size: 20px; color: #1e293b; font-weight: bold;">
+                <?!= data.title ?>
+              </h2>
+              <? if (data.greeting) { ?>
+              <p style="margin: 0 0 10px 0; font-size: 16px; line-height: 1.6; color: #475569;">
+                <?!= data.greeting ?>
+              </p>
+              <? } ?>
+              <p style="margin: 0 0 25px 0; font-size: 16px; line-height: 1.6; color: #475569;">
+                <?!= data.main_message ?>
+              </p>
+
+              <!-- Details Table -->
+              <? if (data.details) { ?>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%"
+                style="border-collapse: collapse; background-color: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 25px;">
+                <? for (var key in data.details) { ?>
+                <tr>
+                  <th width="30%"
+                    style="padding: 10px 15px; text-align: left; font-size: 14px; color: #475569; border-bottom: 1px solid #e2e8f0; font-weight: bold;">
+                    <?= key ?>
+                  </th>
+                  <td
+                    style="padding: 10px 15px; text-align: left; font-size: 14px; color: #1e293b; border-bottom: 1px solid #e2e8f0;">
+                    <?!= data.details[key] ?>
+                  </td>
+                </tr>
+                <? } ?>
+              </table>
+              <? } ?>
+
+              <!-- Notes Section -->
+              <? if (data.notes) { ?>
+              <div
+                style="background-color: #fefce8; border-left: 4px solid #facc15; padding: 15px; margin-bottom: 25px; border-radius: 0 6px 6px 0;">
+                <p style="margin: 0; font-size: 14px; color: #854d0e; font-weight: bold;">Approver's Notes:</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px; line-height: 1.6; color: #854d0e;">
+                  <?!= data.notes ?>
+                </p>
+              </div>
+              <? } ?>
+
+              <!-- Call to Action Button -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center">
+                    <a href="<?= data.buttonUrl ?>" target="_blank"
+                      style="display: inline-block; padding: 12px 24px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #3b82f6; text-decoration: none; border-radius: 6px;">
+                      <?= data.buttonText ?>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td
+              style="padding: 20px 30px; background-color: #f8fafc; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; text-align: center; color: #64748b; font-size: 12px;">
+              <p style="margin: 0;">This is an automated notification. Please do not reply to this email.</p>
+              <p style="margin: 10px 0 0 0;">&copy;
+                <?= new Date().getFullYear() ?>
+                <?= data.companyName ?>. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+
+</html>

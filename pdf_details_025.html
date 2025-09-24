@@ -1,0 +1,98 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const details = get(['details'], request) || {};
+  const itSetup = details.itSetup || {};
+  const accessRights = details.accessRights || {};
+
+  const yesText = 'Yes';
+  const noText = 'No';
+  const renderCheck = (value) => value ? `✓ ${yesText}` : `✗ ${noText}`;
+?>
+<div class="section">
+  <h3 class="section-title">รายละเอียดในฟอร์ม (Form Details)</h3>
+
+  <div class="subsection">
+    <h4 class="subsection-title">ข้อมูลพนักงานใหม่ (New Employee Information)</h4>
+    <table class="details-table">
+      <tr>
+        <th width="30%">ชื่อ-นามสกุล (ไทย)</th>
+        <td>
+          <?= details.newEmployeeNameTh || '—' ?>
+        </td>
+        <th>ชื่อ-นามสกุล (Eng)</th>
+        <td>
+          <?= details.newEmployeeNameEn || '—' ?>
+        </td>
+      </tr>
+      <tr>
+        <th>รหัสพนักงาน</th>
+        <td>
+          <?= details.newEmployeeId || '—' ?>
+        </td>
+        <th>ตำแหน่ง</th>
+        <td>
+          <?= details.newEmployeePosition || '—' ?>
+        </td>
+      </tr>
+      <tr>
+        <th>เบอร์มือถือ</th>
+        <td>
+          <?= details.newEmployeeMobile || '—' ?>
+        </td>
+        <th>วันที่เริ่มงาน</th>
+        <td>
+          <?= details.startDate || '—' ?>
+        </td>
+      </tr>
+      <tr>
+        <th>ประเภทพนักงาน</th>
+        <td>
+          <?= details.employeeType || '—' ?>
+        </td>
+        <th>ส่วนงาน / สาขา</th>
+        <td>
+          <?= details.sectionBranch || '—' ?>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="subsection">
+    <h4 class="subsection-title">ความต้องการด้าน IT (IT Setup Requirements)</h4>
+    <table class="details-table">
+      <tr>
+        <th width="30%">User Account เข้าเครื่อง Computer</th>
+        <td>
+          <?= renderCheck(itSetup.computerAccount) ?>
+        </td>
+        <th>Email Account</th>
+        <td>
+          <?= renderCheck(itSetup.emailAccount) ?>
+        </td>
+      </tr>
+      <tr>
+        <th>ติดตั้ง Printer และ Scan</th>
+        <td>
+          <?= renderCheck(itSetup.printerScan) ?>
+        </td>
+        <th>เครื่องคอมพิวเตอร์</th>
+        <td>
+          <?= itSetup.hardware || '—' ?>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="subsection">
+    <h4 class="subsection-title">สิทธิ์การเข้าใช้งาน (Access Rights)</h4>
+    <p><strong>สิทธิ์ในการเข้าใช้งานระบบ WIFI:</strong>
+      <?= renderCheck(accessRights.wifi) ?>
+    </p>
+    <p><strong>สิทธิ์ในการใช้ VPN เข้าใช้งานระบบ ESS:</strong>
+      <?= renderCheck(accessRights.vpn) ?>
+    </p>
+    <p><strong>CC Ticket ไปยัง Email:</strong>
+      <?= details.ccEmails || '—' ?>
+    </p>
+  </div>
+</div>

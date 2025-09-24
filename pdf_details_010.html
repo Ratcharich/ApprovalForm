@@ -1,0 +1,29 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const servers = get(['details', 'servers'], request) || [];
+?>
+<? if (servers && servers.length > 0) { ?>
+<div class="section">
+  <h3 class="section-title">B: ข้อมูลสิทธิ์การขอใช้บริการ (Service Request Details)</h3>
+  <table class="details-table">
+    <thead>
+      <tr>
+        <th>ชื่อเซิร์ฟเวอร์ (Server Name)</th>
+        <th>IP Address</th>
+        <th>การเชื่อมต่อ (Connection)</th>
+        <th>สิทธิ์ (Permission)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (var i = 0; i < servers.length; i++) { var server = servers[i]; ?>
+      <tr>
+        <td><?= server.serverName || '—' ?></td>
+        <td><?= server.ipAddress || '—' ?></td>
+        <td><?= (server.connection || []).join(', ') || '—' ?></td>
+        <td><?= (server.permission || []).join(', ') || '—' ?></td>
+      </tr>
+      <? } ?>
+    </tbody>
+  </table>
+</div>
+<? } ?>

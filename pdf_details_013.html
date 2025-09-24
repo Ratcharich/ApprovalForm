@@ -1,0 +1,27 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const details = get(['details'], request) || {};
+?>
+<div class="section">
+  <h3 class="section-title">รายละเอียดในฟอร์ม (Form Details)</h3>
+  <table class="details-table">
+    <tr>
+      <th width="30%">วัตถุประสงค์ (Objective)</th>
+      <td><?= details.objective || '—' ?></td>
+    </tr>
+    <tr>
+      <th>ระยะเวลาการใช้งาน (Access Duration)</th>
+      <td><?= details.duration || '—' ?></td>
+    </tr>
+    <? if (details.duration === 'Temporary') { ?>
+    <tr>
+      <th>วันที่สิ้นสุด (End Date)</th>
+      <td><?= details.endDate || '—' ?></td>
+    </tr>
+    <? } ?>
+    <tr>
+      <th>การรับทราบและปฏิบัติตามนโยบาย</th>
+      <td><?= details.acknowledged ? '✓ Yes' : '✗ No' ?></td>
+    </tr>
+  </table>
+</div>

@@ -1,0 +1,31 @@
+<!-- d:\PJ\ProjectAppApprove\src\pdf_details_101.html -->
+<?
+  // Helper function to safely access nested properties
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const assets = get(['details', 'assets'], request) || [];
+?>
+
+<? if (assets && assets.length > 0) { ?>
+<div class="section">
+  <h3 class="section-title">B: รายการสินทรัพย์ที่ต้องการกำจัด (Asset Disposal List)</h3>
+  <table class="details-table">
+    <thead>
+      <tr>
+        <th>ประเภทสินทรัพย์ (Asset Type)</th>
+        <th>Serial Number</th>
+        <th>เหตุผลในการกำจัด (Reason for Disposal)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (var i = 0; i < assets.length; i++) { ?>
+      <? var asset = assets[i]; ?>
+      <tr>
+        <td><?= asset.assetType || '—' ?></td>
+        <td><?= asset.serialNumber || '—' ?></td>
+        <td><?= asset.reason || '—' ?></td>
+      </tr>
+      <? } ?>
+    </tbody>
+  </table>
+</div>
+<? } ?>

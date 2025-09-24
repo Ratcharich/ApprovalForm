@@ -1,0 +1,165 @@
+<style>
+  .nav-btn.active {
+    background-color: #eef2ff;
+    /* indigo-100 */
+    color: #4338ca;
+    /* indigo-700 */
+    font-weight: 600;
+  }
+
+  .dark .nav-btn.active {
+    background-color: #3730a3;
+    /* indigo-800 */
+    color: #e0e7ff;
+    /* indigo-200 */
+  }
+
+  .lang-btn {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .lang-btn.active {
+    background-color: #3b82f6;
+    /* blue-500 */
+    color: white;
+  }
+
+  .nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    background-color: #ef4444;
+    /* red-500 */
+    color: white;
+    position: absolute;
+    top: 0;
+    right: 0;
+    transform: translate(40%, -40%);
+  }
+
+  .nav-badge.mobile {
+    position: static;
+    transform: none;
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes toast-out {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  .toast-in {
+    animation: toast-in 0.3s ease-out forwards;
+  }
+
+  .toast-out {
+    animation: toast-out 0.3s ease-in forwards;
+  }
+
+  /* Responsive Table Styles for Mobile/Tablet */
+  @media (max-width: 767px) {
+
+    /* This corresponds to Tailwind's `md` breakpoint */
+    .responsive-table thead {
+      display: none;
+    }
+
+    .responsive-table tr {
+      display: block;
+      margin-bottom: 1rem;
+      border-radius: 0.5rem;
+      background-color: white;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      /* slate-200 */
+    }
+
+    .responsive-table td {
+      display: block;
+      padding: 0.5rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid #f1f5f9;
+      /* slate-100 */
+    }
+
+    .responsive-table td:last-child {
+      border-bottom: none;
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+
+    /* Make the first cell the "card header" */
+    .responsive-table td:first-child {
+      background-color: #f8fafc;
+      /* slate-50 */
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e2e8f0;
+      /* slate-200 */
+      border-top-left-radius: 0.5rem;
+      border-top-right-radius: 0.5rem;
+    }
+
+    /* Hide the data-label for the first cell */
+    .responsive-table td:first-child::before {
+      display: none;
+    }
+
+    .responsive-table td::before {
+      content: attr(data-label);
+      display: block;
+      font-weight: 500;
+      font-size: 0.75rem;
+      color: #64748b;
+      /* slate-500 */
+      margin-bottom: 0.125rem;
+    }
+
+    .dark .responsive-table tr {
+      background-color: #1e293b;
+      /* slate-800 */
+      border: 1px solid #334155;
+      /* slate-700 */
+    }
+
+    .dark .responsive-table td:first-child {
+      background-color: #334155;
+      /* slate-700 */
+      border-bottom: 1px solid #475569;
+      /* slate-600 */
+    }
+
+    .dark .responsive-table td {
+      border-bottom: 1px solid #334155;
+      /* slate-700 */
+    }
+
+    .dark .responsive-table td::before {
+      color: #94a3b8;
+      /* slate-400 */
+    }
+  }
+</style>

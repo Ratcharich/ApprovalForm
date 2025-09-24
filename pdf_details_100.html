@@ -1,0 +1,40 @@
+<?
+  const get = (p, o) => p.reduce((xs, x) => (xs && xs[x]) ? xs[x] : null, o);
+  const recipientInfo = get(['details', 'recipientInfo'], request) || {};
+  const equipment = get(['details', 'equipment'], request) || [];
+?>
+<div class="section">
+  <h3 class="section-title">รายละเอียดในฟอร์ม (Form Details)</h3>
+
+  <div class="subsection">
+    <h4 class="subsection-title">B: ข้อมูลผู้รับอุปกรณ์ (Recipient Information)</h4>
+    <table class="details-table">
+      <tr>
+        <th width="30%">ชื่อผู้รับ (Recipient Name)</th>
+        <td><?= recipientInfo.name || '—' ?></td>
+        <th>ตำแหน่ง (Position)</th>
+        <td><?= recipientInfo.position || '—' ?></td>
+      </tr>
+      <tr>
+        <th>ฝ่าย (Department)</th>
+        <td><?= recipientInfo.department || '—' ?></td>
+        <th>เบอร์โทร (Telephone)</th>
+        <td><?= recipientInfo.tel || '—' ?></td>
+      </tr>
+    </table>
+  </div>
+
+  <? if (equipment.length > 0) { ?>
+  <div class="subsection">
+    <h4 class="subsection-title">C: รายการอุปกรณ์ (Equipment List)</h4>
+    <table class="details-table">
+      <thead><tr><th>รายการ (Item)</th><th>Serial Number</th><th>Asset Code</th><th>หมายเหตุ (Notes)</th></tr></thead>
+      <tbody>
+        <? for (var i = 0; i < equipment.length; i++) { var item = equipment[i]; ?>
+        <tr><td><?= item.item ?></td><td><?= item.serialNumber ?></td><td><?= item.assetCode ?></td><td><?= item.notes ?></td></tr>
+        <? } ?>
+      </tbody>
+    </table>
+  </div>
+  <? } ?>
+</div>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+    body { font-family: 'Sarabun', sans-serif; font-size: 10pt; color: #333; }
+    .container { width: 100%; margin: 0 auto; }
+    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+    .header h1 { margin: 0; font-size: 16pt; }
+    .header h2 { margin: 5px 0 0 0; font-size: 14pt; font-weight: normal; }
+    .section { margin-bottom: 20px; border: 1px solid #ccc; border-radius: 5px; overflow: hidden; }
+    .section-title { font-size: 12pt; font-weight: bold; background-color: #eee; padding: 8px; margin: 0; }
+    .subsection { padding: 10px; border-top: 1px solid #eee; }
+    .subsection-title { font-size: 11pt; font-weight: bold; margin: 0 0 8px 0; }
+    .details-table { width: 100%; border-collapse: collapse; }
+    .details-table th, .details-table td { border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }
+    .details-table th { font-weight: bold; background-color: #f9f9f9; width: 25%; }
+    .history-table { width: 100%; border-collapse: collapse; }
+    .history-table th, .history-table td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    .history-table th { font-weight: bold; background-color: #f9f9f9; }
+    .detail-text { white-space: pre-wrap; word-wrap: break-word; }
+    pre { background-color: #f5f5f5; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Sarabun', sans-serif; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ใบอนุมัติคำขอ (Approval Request Form)</h1>
+      <h2><?= request.formType ?></h2>
+    </div>
+
+    <!-- Requester Information -->
+    <div class="section">
+      <h3 class="section-title">A: ข้อมูลผู้ขอ (Requester Information)</h3>
+      <table class="details-table">
+        <tr>
+          <th>รหัสคำขอ (Request ID)</th>
+          <td><?= request.requestId ?></td>
+          <th>วันที่ขอ (Request Date)</th>
+          <td><?= new Date(request.requestTimestamp).toLocaleString('th-TH') ?></td>
+        </tr>
+        <tr>
+          <th>ชื่อผู้ขอ (Requester Name)</th>
+          <td><?= request.requesterName ?></td>
+          <th>อีเมล (Email)</th>
+          <td><?= request.requesterEmail ?></td>
+        </tr>
+        <tr>
+          <th>ฝ่าย (Department)</th>
+          <td><?= request.department ?></td>
+          <th>ส่วนงานย่อย (Sub-Department)</th>
+          <td><?= request.subDepartment || '—' ?></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Form-Specific Details -->
+    <?!= getPdfFormDetailsHtml(request) ?>
+
+    <!-- IT Review Details -->
+    <?!= include('pdf_details_it_review', request) ?>
+
+    <!-- Approval History -->
+    <div class="section">
+      <h3 class="section-title">ประวัติการอนุมัติ (Approval History)</h3>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>วันที่ (Date)</th>
+            <th>ผู้ดำเนินการ (Action By)</th>
+            <th>การดำเนินการ (Action)</th>
+            <th>หมายเหตุ (Notes)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <? if (request.approvalHistory && request.approvalHistory.length > 0) { ?>
+            <? for (var i = 0; i < request.approvalHistory.length; i++) { var h = request.approvalHistory[i]; ?>
+              <tr>
+                <td><?= new Date(h.timestamp).toLocaleString('th-TH') ?></td>
+                <td><?= h.approverEmail ?></td>
+                <td><?= h.action ?></td>
+                <td><?= h.notes || '—' ?></td>
+              </tr>
+            <? } ?>
+          <? } else { ?>
+            <tr>
+              <td colspan="4" style="text-align: center;">ไม่มีประวัติ</td>
+            </tr>
+          <? } ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

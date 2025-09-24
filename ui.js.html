@@ -1,0 +1,2418 @@
+<script>
+  /**
+   * Renders the main menu grid with buttons for each available form.
+   * This function reads from FORM_CONFIG and appState.translations.
+   */
+  function renderMainMenu() {
+    const menuGrid = document.getElementById("main-menu-grid");
+    if (!menuGrid) return;
+
+    // Clear any existing content
+    menuGrid.innerHTML = "";
+
+    const formTranslations = appState.translations.forms;
+    if (!formTranslations || !window.FORM_CONFIG) {
+      console.error("Form translations or FORM_CONFIG not available.");
+      menuGrid.innerHTML = `<p class="text-red-500 dark:text-red-400 col-span-full text-center">${
+        appState.translations.errorLoadingData || "Error loading data"
+      }</p>`;
+      return;
+    }
+
+    // Sort form IDs numerically to ensure consistent order
+    const sortedFormIds = Object.keys(window.FORM_CONFIG).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true })
+    );
+
+    for (const formId of sortedFormIds) {
+      // Check if the form is disabled
+      if (appState.disabledForms.includes(formId)) {
+        continue; // Skip this form
+      }
+
+      const formInfo = formTranslations[formId];
+      const formConfig = window.FORM_CONFIG[formId];
+
+      if (formInfo && formConfig) {
+        const buttonHtml = `
+                <div class="fade-in h-full">
+                    <button onclick="renderForm('${formId}')" class="group w-full h-full flex flex-col items-center justify-center text-center p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300">
+                        <div class="w-16 h-16 ${formConfig.gradientClass} rounded-full flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110">
+                            <i class="${formConfig.iconClass} text-white text-2xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">${formInfo.shortTitle}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${formInfo.subtitle}</p>
+                    </button>
+                </div>
+                `;
+        menuGrid.innerHTML += buttonHtml;
+      }
+    }
+  }
+
+  // --- GENERIC TABLE RENDERER ---
+  /**
+   * A generic function to render a view with a responsive table.
+   * @param {object} config - Configuration object for the table view.
+   * @prop {string} containerId - The ID of the container element for this view.
+   * @prop {string} titleKey - The translation key for the main title.
+   * @prop {string} subtitleKey - The translation key for the subtitle.
+   * @prop {Array<object>} items - The array of data items to display.
+   * @prop {Array<object>} headers - An array of header objects, e.g., [{key: 'colName', label: 'Column Name', class: '...'}].
+   * @prop {function} rowRenderer - A function that takes an item and returns the HTML string for its table row (<tr>).
+   * @prop {string} noDataKey - Translation key for the message when there are no items.
+   * @prop {string} [filterTabsHtml] - Optional HTML string for filter tabs.
+   * @prop {string} [headerActionsHtml] - Optional HTML string for buttons in the header (e.g., "Add New").
+   * @prop {boolean} [showCreateButtonOnEmpty] - If true, shows a "Create New Request" button on the empty state.
+   */
+  function renderTableView(config) {
+    const {
+      containerId,
+      titleKey,
+      subtitleKey,
+      items,
+      headers,
+      rowRenderer,
+      noDataKey,
+      filterTabsHtml = "",
+      headerActionsHtml = "",
+      showCreateButtonOnEmpty = false,
+      sortState, // { key, direction }
+      sortHandlerName,
+      searchTerm,
+      searchViewType,
+    } = config;
+
+    const container = document.getElementById(containerId);
+    const tableContentContainerId = `${containerId}-table-content`;
+
+    // Build table headers
+    const tableHeadersHtml = headers
+      .map((h) => {
+        const thClass =
+          h.class ||
+          "px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider";
+        if (h.sortable) {
+          const isCurrentSort = sortState && sortState.key === h.sortKey;
+          const sortIcon = isCurrentSort
+            ? sortState.direction === "asc"
+              ? '<i class="fas fa-sort-up ml-2"></i>'
+              : '<i class="fas fa-sort-down ml-2"></i>'
+            : '<i class="fas fa-sort text-slate-400 ml-2"></i>';
+
+          return `<th class="${thClass}">
+                            <button onclick="${sortHandlerName}('${searchViewType}', '${h.sortKey}')" class="flex items-center hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                                ${h.label}
+                                ${sortIcon}
+                            </button>
+                        </th>`;
+        }
+        return `<th class="${thClass}">${h.label}</th>`;
+      })
+      .join("");
+
+    // Build table rows
+    let tableRowsHtml = "";
+    if (!items) {
+      tableRowsHtml = `<tr><td colspan="${headers.length}" class="text-center py-12 text-red-600">${appState.translations.errorLoadingData}</td></tr>`;
+    } else if (items.length === 0) {
+      tableRowsHtml = `
+                <tr>
+                    <td colspan="${
+                      headers.length
+                    }" class="text-center py-16 px-6">
+                        <div class="flex flex-col items-center">
+                            <i class="fas fa-folder-open text-5xl text-slate-300 dark:text-slate-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300">${
+                              appState.translations[noDataKey] ||
+                              "No items found."
+                            }</h3>
+                            ${
+                              showCreateButtonOnEmpty
+                                ? `
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${
+                                  appState.translations
+                                    .emptyStateMyRequestsSubtitle ||
+                                  "You can start by creating a new request."
+                                }</p>
+                                <button onclick="showView('main-menu-view')" class="mt-6 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium">
+                                    <i class="fas fa-plus mr-2"></i>
+                                    ${appState.translations.startNewRequest}
+                                </button>
+                            `
+                                : ""
+                            }
+                        </div>
+                    </td>
+                </tr>
+            `;
+    } else {
+      tableRowsHtml = items.map(rowRenderer).join("");
+    }
+
+    // Assemble the table content HTML
+    const tableContentHtml = `
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+                ${
+                  filterTabsHtml || searchViewType
+                    ? `
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-4 justify-between">
+                    <div class="flex flex-wrap items-center gap-2">
+                       ${filterTabsHtml}
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-search text-slate-400"></i>
+                        </div>
+                        <input type="search" id="${searchViewType}-search-input" oninput="debouncedSearch('${searchViewType}')" onkeydown="handleSearchKeyDown(event, '${searchViewType}')" value="${
+                        searchTerm || ""
+                      }"
+                               class="block w-full md:w-64 pl-10 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                               placeholder="${
+                                 appState.translations.searchPlaceholder ||
+                                 "Search ID or Name..."
+                               }">
+                    </div>
+                </div>
+                `
+                    : ""
+                }
+                <div class="overflow-x-auto">
+                    <table class="responsive-table min-w-full divide-y-0">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 hidden md:table-header-group">
+                            <tr>${tableHeadersHtml}</tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                            ${tableRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+    // Check if the shell is already rendered. If not, render the whole view.
+    // If it is, just update the table content.
+    const tableContentContainer = document.getElementById(
+      tableContentContainerId
+    );
+    if (tableContentContainer) {
+      tableContentContainer.innerHTML = tableContentHtml;
+    } else {
+      container.innerHTML = `
+                <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 fade-in">
+                    <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">${appState.translations[titleKey]}</h2>
+                            <p class="text-slate-600 dark:text-slate-400">${appState.translations[subtitleKey]}</p>
+                        </div>
+                        <div>
+                            ${headerActionsHtml}
+                        </div>
+                    </div>
+                    <div id="${tableContentContainerId}">
+                        ${tableContentHtml}
+                    </div>
+                </div>
+            `;
+    }
+
+    container.classList.remove("hidden");
+  }
+
+  // --- "My Requests" & "Approvals" View Renderers ---
+  function renderRequestListView(config) {
+    const {
+      containerId,
+      titleKey,
+      subtitleKey,
+      requests,
+      filterOptions,
+      activeFilter,
+      filterHandlerName,
+      sortState,
+      isApproverView,
+      searchTerm,
+      searchViewType,
+    } = config;
+
+    // Build filter tabs HTML
+    const sortedRequests = [...(requests || [])].sort((a, b) => {
+      if (!sortState || !sortState.key) return 0;
+
+      const key = sortState.key;
+      const direction = sortState.direction === "asc" ? 1 : -1;
+
+      let valA = a[key];
+      let valB = b[key];
+
+      // Special handling for dates
+      if (key === "requestTimestamp") {
+        valA = new Date(valA);
+        valB = new Date(valB);
+      }
+
+      if (valA < valB) return -1 * direction;
+      if (valA > valB) return 1 * direction;
+      return 0;
+    });
+
+    const filterTabsHtml = filterOptions
+      .map(
+        (status) => `
+            <button onclick="${filterHandlerName}('${status}')" data-status="${status}"
+                class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  activeFilter === status
+                    ? "bg-blue-600 text-white"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }">${
+          appState.translations["filter" + status.replace(/\s/g, "")] || status
+        }
+            </button>
+        `
+      )
+      .join("");
+
+    const lowerCaseSearchTerm = searchTerm?.toLowerCase() || "";
+
+    const filteredAndSearchedRequests = sortedRequests.filter((r) => {
+      const statusMatch =
+        activeFilter === STATUS.ALL || r.status === activeFilter;
+      const searchMatch =
+        !lowerCaseSearchTerm ||
+        (r.requestId &&
+          r.requestId.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (r.requesterName &&
+          r.requesterName.toLowerCase().includes(lowerCaseSearchTerm));
+      return statusMatch && searchMatch;
+    });
+
+    const noItemsKey =
+      requests &&
+      requests.length > 0 &&
+      filteredAndSearchedRequests.length === 0
+        ? "noFilteredRequestsFound"
+        : isApproverView
+        ? "noApprovalsFound"
+        : "noRequestsFound";
+
+    const headers = [
+      {
+        key: "requestId",
+        label: appState.translations.tableRequestId,
+        sortable: true,
+        sortKey: "requestId",
+      },
+      isApproverView
+        ? { key: "requester", label: appState.translations.tableRequester }
+        : { key: "formType", label: appState.translations.tableFormType },
+      {
+        key: "date",
+        label: appState.translations.tableDate,
+        sortable: true,
+        sortKey: "requestTimestamp",
+      },
+      {
+        key: "status",
+        label: appState.translations.tableStatus,
+        sortable: false,
+      },
+      ...(!isApproverView
+        ? [{ key: "approver", label: appState.translations.tableApprover }]
+        : []),
+      {
+        key: "actions",
+        label: appState.translations.tableActions,
+        class:
+          "px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider",
+      },
+    ];
+
+    const rowRenderer = (r) => {
+      const approver =
+        r.status === STATUS.PENDING
+          ? r.currentApproverEmail
+          : JSON.parse(r.approvalHistory || "[]").find(
+              (h) => h.action === STATUS.APPROVED
+            )?.approverEmail || "-";
+      return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td data-label="${
+                      appState.translations.tableRequestId
+                    }" class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-200 truncate md:whitespace-normal">${
+        r.requestId
+      }</td>
+                    ${
+                      isApproverView
+                        ? `<td data-label="${appState.translations.tableRequester}" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 truncate md:whitespace-normal">${r.requesterName}</td>`
+                        : `<td data-label="${appState.translations.tableFormType}" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 truncate md:whitespace-normal">${r.formType}</td>`
+                    }
+                    <td data-label="${
+                      appState.translations.tableDate
+                    }" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">${formatDate(
+        r.requestTimestamp
+      )}</td>
+                    <td data-label="${
+                      appState.translations.tableStatus
+                    }" class="px-6 py-4">
+                        <div class="md:w-full md:flex md:justify-start">
+                            <span class="inline-block px-3 py-1 text-xs font-semibold rounded-full ${getStatusClass(
+                              r.status
+                            )}">
+                                ${
+                                  appState.translations[
+                                    "filter" + r.status.replace(/\s/g, "")
+                                  ] || r.status
+                                }
+                            </span>
+                        </div>
+                    </td>
+                    ${
+                      !isApproverView
+                        ? `<td data-label="${
+                            appState.translations.tableApprover
+                          }" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 truncate md:whitespace-normal">${
+                            approver || "-"
+                          }</td>`
+                        : ""
+                    }
+                    <td data-label="${
+                      appState.translations.tableActions
+                    }" class="px-6 py-4 text-sm">
+                        <div class="w-full flex justify-end md:justify-center">
+                            <button onclick="showView('request-detail-view', {requestId: '${
+                              r.requestId
+                            }', isApprover: ${isApproverView}})" class="w-full md:w-auto inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm">
+                                <i class="fas fa-search-plus mr-2"></i>
+                                ${appState.translations.btnViewDetails}
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+    };
+
+    renderTableView({
+      containerId,
+      titleKey,
+      subtitleKey,
+      items: filteredAndSearchedRequests,
+      headers,
+      rowRenderer,
+      noDataKey: noItemsKey,
+      filterTabsHtml,
+      showCreateButtonOnEmpty: !isApproverView,
+      sortState: sortState,
+      sortHandlerName: "applySort",
+      searchTerm,
+      searchViewType,
+    });
+  }
+
+  // --- "Manage Approvers" View Renderer ---
+  function renderManageApproversView(config) {
+    const { approvers, searchTerm } = config;
+
+    const lowerCaseSearchTerm = (searchTerm || "").toLowerCase();
+
+    // Filter approvers based on the search term
+    const filteredApprovers = (approvers || []).filter((app) => {
+      if (!lowerCaseSearchTerm) return true;
+      return (
+        (app.approverName &&
+          app.approverName.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (app.approverEmail &&
+          app.approverEmail.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (app.department &&
+          app.department.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (app.position &&
+          app.position.toLowerCase().includes(lowerCaseSearchTerm))
+      );
+    });
+
+    const noItemsKey =
+      approvers && approvers.length > 0 && filteredApprovers.length === 0
+        ? "noFilteredRequestsFound"
+        : "noApproversConfigured";
+
+    const headers = [
+      { key: "department", label: appState.translations.colDepartment },
+      { key: "approverName", label: appState.translations.colApproverName },
+      { key: "position", label: appState.translations.colPosition },
+      { key: "email", label: appState.translations.colApproverEmail },
+      {
+        key: "level",
+        label: appState.translations.colLevel,
+        class:
+          "px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider",
+      },
+      { key: "role", label: appState.translations.colRole },
+      {
+        key: "actions",
+        label: appState.translations.tableActions,
+        class:
+          "px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider",
+      },
+    ];
+
+    const rowRenderer = (app) => {
+      const approverJsonString = JSON.stringify(app).replace(/'/g, "&apos;");
+      return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td data-label="${
+                      appState.translations.colDepartment
+                    }" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 truncate md:whitespace-normal">${
+        app.department ||
+        `<span class="text-slate-400 dark:text-slate-500 italic">Global</span>`
+      }</td>
+                    <td data-label="${
+                      appState.translations.colApproverName
+                    }" class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-200 truncate md:whitespace-normal">${
+        app.approverName
+      }</td>
+                    <td data-label="${
+                      appState.translations.colPosition
+                    }" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 truncate md:whitespace-normal">${
+        app.position || "—"
+      }</td>
+                    <td data-label="${
+                      appState.translations.colApproverEmail
+                    }" class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 truncate md:whitespace-normal">${
+        app.approverEmail
+      }</td>
+                    <td data-label="${
+                      appState.translations.colLevel
+                    }" class="px-6 py-4 text-sm text-slate-900 dark:text-slate-200 font-bold text-right md:text-center">${
+        app.level
+      }</td>
+                    <td data-label="${
+                      appState.translations.colRole
+                    }" class="px-6 py-4 text-sm">
+                        <div class="w-full flex justify-end md:justify-start">
+                            <span class="inline-block px-3 py-1 text-xs font-semibold rounded-md ${
+                              app.role === "Admin"
+                                ? "bg-purple-600 text-white"
+                                : "bg-gray-600 text-white"
+                            }">${app.role || "Approver"}</span>
+                        </div>
+                    </td>
+                    <td data-label="${
+                      appState.translations.tableActions
+                    }" class="px-6 py-4 text-sm">
+                        <div class="w-full flex justify-end md:justify-center items-center gap-x-2">
+                            <button onclick='openApproverModal(this)' data-approver='${approverJsonString}' class="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-xs inline-flex items-center">
+                                <i class="fas fa-pencil-alt mr-1"></i> ${
+                                  appState.translations.btnEdit
+                                }
+                            </button>
+                            <button onclick="deleteApprover('${
+                              app.approverEmail
+                            }')" class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs inline-flex items-center">
+                                <i class="fas fa-trash-alt mr-1"></i> ${
+                                  appState.translations.btnDelete
+                                }
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+    };
+
+    const headerActionsHtml = `
+                <button onclick="openApproverModal(null)" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <i class="fas fa-plus mr-2"></i>
+                    ${appState.translations.btnAddApprover}
+                </button>
+            `;
+
+    renderTableView({
+      containerId: "manage-approvers-view",
+      titleKey: "manageApproversTitle",
+      subtitleKey: "manageApproversSubtitle",
+      items: filteredApprovers,
+      headers: headers,
+      rowRenderer: rowRenderer,
+      noDataKey: noItemsKey,
+      headerActionsHtml: headerActionsHtml,
+      showCreateButtonOnEmpty: false,
+      searchTerm: searchTerm,
+      searchViewType: "manage-approvers",
+    });
+  }
+
+  /**
+   * PRIVATE: Renders the action buttons for the request detail view.
+   * @param {object} request - The request object.
+   * @param {boolean} isApproverView - True if the user is an approver.
+   * @param {string} extraClasses - Extra CSS classes for button styling.
+   * @returns {string} HTML string for the action buttons.
+   */
+  function _renderDetailActionButtons(
+    request,
+    isApproverView,
+    extraClasses = ""
+  ) {
+    const isPending = [
+      STATUS.PENDING,
+      STATUS.PENDING_IT_REVIEWER,
+      STATUS.PENDING_IT_MANAGER,
+      STATUS.PENDING_IT_DIRECTOR,
+    ].includes(request.status);
+    if (!isPending || !isApproverView) {
+      return "";
+    }
+
+    const isItReview = [
+      STATUS.PENDING_IT_REVIEWER,
+      STATUS.PENDING_IT_MANAGER,
+      STATUS.PENDING_IT_DIRECTOR,
+    ].includes(request.status);
+
+    return `
+            <button onclick="openApprovalActionModal('${
+              request.requestId
+            }', STATUS.REJECTED)" class="${extraClasses} bg-red-600 text-white hover:bg-red-700">
+                ${appState.translations.btnReject}
+            </button>
+            ${
+              isItReview
+                ? `
+                <button onclick="openApprovalActionModal('${
+                  request.requestId
+                }', STATUS.APPROVED)" class="${extraClasses} bg-blue-600 text-white hover:bg-blue-700">
+                    ${appState.translations.btnSubmitReview || "Submit"}
+                </button>
+            `
+                : `
+                ${
+                  request.status === STATUS.PENDING
+                    ? `<button onclick="openApprovalActionModal('${request.requestId}', STATUS.FORWARDED)" class="${extraClasses} bg-yellow-500 text-white hover:bg-yellow-600">${appState.translations.approveAndForward}</button>`
+                    : ""
+                }
+                <button onclick="openApprovalActionModal('${
+                  request.requestId
+                }', STATUS.APPROVED)" class="${extraClasses} bg-green-600 text-white hover:bg-green-700">
+                    ${appState.translations.btnApprove}
+                </button>
+            `
+            }
+        `;
+  }
+
+  function renderRequestDetails(request, isApproverView) {
+    const container = document.getElementById("request-detail-view");
+    const backView = isApproverView ? "approvals-view" : "my-requests-view";
+
+    let formDetails;
+    try {
+      formDetails = JSON.parse(request.details);
+      request.itReviewDetails = JSON.parse(request.itReviewDetails || "{}"); // Also parse IT details
+    } catch (e) {
+      formDetails = {}; // Gracefully handle if details are not valid JSON
+    }
+    const position =
+      formDetails.position || formDetails.requesterPosition || "-";
+    const tel = formDetails.tel || formDetails.requesterTel || "-";
+
+    const desktopButtonClasses = "px-4 py-2 rounded-md transition-colors";
+    const mobileButtonClasses =
+      "flex-1 justify-center px-4 py-2 rounded-md transition-colors text-sm";
+    let detailsHtml = `
+    <div class="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div class="space-y-6">
+            <!-- Header Section -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+                <button onclick="showView('${backView}')" 
+                    class="inline-flex items-center justify-center sm:justify-start px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    <span class="mr-2">←</span> ${
+                      appState.translations.btnBackToList
+                    }
+                </button>
+                <div class="flex items-center flex-wrap justify-end gap-2">
+                    <span class="inline-block px-4 py-2 text-sm font-semibold rounded-full ${getStatusClass(
+                      request.status
+                    )}">
+                        ${
+                          appState.translations["filter" + request.status] ||
+                          request.status
+                        }
+                    </span>
+                    ${
+                      request.status === STATUS.APPROVED
+                        ? `
+                        <button onclick="downloadPdf('${request.requestId}')" 
+                            class="inline-flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-file-pdf mr-2"></i> ${
+                              appState.translations.btnDownloadPdf ||
+                              "Download PDF"
+                            }
+                        </button>
+                    `
+                        : ""
+                    }
+                    ${_renderDetailActionButtons(
+                      request,
+                      isApproverView,
+                      desktopButtonClasses
+                    )}
+                </div>
+            </div>
+
+            <!-- Main Info Card -->
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+                <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-200">${
+                      request.formType
+                    }</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">${
+                      appState.translations.requestDetailId
+                    } ${request.requestId}</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-6">
+                        <!-- Requester Info -->
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                              appState.translations.detailRequester
+                            }</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-200">${
+                              request.requesterName
+                            }</p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                              appState.translations.formPosition
+                            }</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-200">${position}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                              appState.translations.detailDepartment
+                            }</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-200">${
+                              request.department
+                            }</p>
+                        </div>
+                        ${
+                          request.subDepartment
+                            ? `
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${appState.translations.formSubDepartment}</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-200">${request.subDepartment}</p>
+                        </div>
+                        `
+                            : ""
+                        }
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                              appState.translations.formTelephone
+                            }</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-200">${tel}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                              appState.translations.detailRequestDate
+                            }</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-200">${formatDate(
+                              request.requestTimestamp
+                            )}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Details Card -->
+            ${
+              formDetails.additionalDetails
+                ? `
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+                <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${appState.translations.formAdditionalDetails}</h3>
+                </div>
+                <div class="p-6">
+                    <p class="text-sm text-gray-800 dark:text-slate-300 whitespace-pre-wrap">${formDetails.additionalDetails}</p>
+                </div>
+            </div>
+            `
+                : ""
+            }
+
+            <!-- Form Details Card -->
+            ${renderFormDetails(request, formDetails)}
+
+            <!-- IT Review Section (conditionally rendered) -->
+            ${renderItReviewSection(request)}
+
+            <!-- Approval History Card -->
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+                <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                      appState.translations.historyTitle
+                    }</h3>
+                </div>
+                <div class="p-6">
+                    <div class="relative pl-4">
+                        <!-- Vertical line -->
+                        <div class="absolute left-2.5 top-0 bottom-0 w-px bg-slate-200 dark:bg-slate-700"></div>
+                    ${(() => {
+                      let history = [];
+                      try {
+                        history = JSON.parse(request.approvalHistory || "[]");
+                      } catch (e) {
+                        console.error("Failed to parse approval history:", e); // Keep logging for debug
+                      }
+                      return (
+                        history
+                          .map((h) => {
+                            const actionText =
+                              appState.translations["filter" + h.action] ||
+                              h.action; // h.action is already a status string
+
+                            // Return a template literal string
+                            return `
+                        <div class="relative mb-6">
+                            <div class="absolute left-0 top-1.5 w-5 h-5 rounded-full ${
+                              h.action === "Approved" ||
+                              h.action === "Forwarded"
+                                ? "bg-green-500"
+                                : "bg-red-500"
+                            } flex items-center justify-center ring-4 ring-white dark:ring-slate-800">
+                                <i class="fas ${
+                                  h.action === "Approved"
+                                    ? "fa-check"
+                                    : h.action === "Forwarded"
+                                    ? "fa-arrow-right"
+                                    : "fa-times"
+                                } text-white text-xs"></i>
+                            </div>
+                            <div class="ml-10">
+                                <p class="font-semibold text-slate-800 dark:text-slate-200">${actionText} ${
+                              appState.translations.historyBy
+                            } <span class="font-bold">${
+                              h.approverEmail
+                            }</span></p>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">${formatDate(
+                                  h.timestamp
+                                )}</p>
+                                ${
+                                  h.notes
+                                    ? `<p class="mt-2 text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 p-3 rounded-md italic">“${h.notes}”</p>`
+                                    : ""
+                                }
+                            </div>
+                        </div>`;
+                          })
+                          .join("") ||
+                        `<p class="text-slate-500 dark:text-slate-400 text-sm ml-10">${appState.translations.historyNoHistory}</p>`
+                      );
+                    })()}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating Action Bar for Mobile -->
+            ${
+              _renderDetailActionButtons(request, isApproverView)
+                ? `
+                <div class="sticky bottom-0 md:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-3 mt-6">
+                    <div class="flex items-center justify-end gap-2">
+                        ${_renderDetailActionButtons(
+                          request,
+                          isApproverView,
+                          mobileButtonClasses
+                        )}
+                    </div>
+                </div>`
+                : ""
+            }
+        </div>
+    </div>
+`;
+
+    container.innerHTML = detailsHtml;
+    container.classList.remove("hidden");
+  }
+
+  /**
+   * Renders the IT Review section, either as a form or as read-only data.
+   * @param {object} request - The full request object.
+   * @param {object} formDetails - The parsed details object from the request.
+   * @returns {string} HTML string for the IT review section.
+   */
+
+  function renderItReviewSection(request) {
+    const formId = (request.formType.match(/ISMS-FM-(\d+)/) || [])[1];
+
+    // Condition 1: Is it an IT review form?
+    if (!formId || !appState.itReviewForms.includes(formId)) {
+      return "";
+    }
+
+    // Condition 2: Has it reached an IT review stage or beyond?
+    const itStatuses = [
+      STATUS.PENDING_IT_REVIEWER,
+      STATUS.PENDING_IT_MANAGER,
+      STATUS.PENDING_IT_DIRECTOR,
+    ];
+    const finalStatuses = [STATUS.APPROVED, STATUS.REJECTED];
+
+    // Check if the request has ever been in an IT status by looking at the history
+    const history = JSON.parse(request.approvalHistory || "[]");
+    const hasReachedItStage = history.some((h) =>
+      itStatuses.includes(h.action)
+    );
+
+    // Render if the current status is an IT status, a final status, OR if it has ever reached an IT stage in the past.
+    if (
+      !itStatuses.includes(request.status) &&
+      !finalStatuses.includes(request.status) &&
+      !hasReachedItStage
+    ) {
+      return ""; // Don't render if it's still pending with the department head.
+    }
+
+    const itReviewData = request.itReviewDetails || {};
+    const isCurrentUserTheApprover =
+      appState.currentUserEmail === request.currentApproverEmail;
+
+    // Helper to create a field (input/textarea or p tag)
+    const createField = (
+      id,
+      labelKey,
+      value,
+      type = "text",
+      isEditable = false
+    ) => {
+      const label = appState.translations[labelKey] || labelKey;
+      if (isEditable) {
+        if (type === "textarea") {
+          return `<div><label for="${id}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${label}</label><textarea id="${id}" rows="3" class="it-review-field mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600">${
+            value || ""
+          }</textarea></div>`;
+        }
+        const inputType = type === "date" ? "date" : "text";
+        return `<div><label for="${id}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">${label}</label><input type="${inputType}" id="${id}" value="${
+          value || ""
+        }" class="it-review-field mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600"></div>`;
+      } else {
+        return `<div><label class="text-xs font-medium text-slate-500 dark:text-slate-400">${label}</label><p class="mt-1 text-sm text-slate-900 dark:text-slate-200 min-h-[20px] whitespace-pre-wrap">${
+          value || "—"
+        }</p></div>`;
+      }
+    };
+
+    const canEditReviewerFields =
+      isCurrentUserTheApprover && request.status === STATUS.PENDING_IT_REVIEWER;
+    const canEditManagerField =
+      isCurrentUserTheApprover && request.status === STATUS.PENDING_IT_MANAGER;
+    const canEditDirectorField =
+      isCurrentUserTheApprover && request.status === STATUS.PENDING_IT_DIRECTOR;
+
+    const fieldsHtml = `
+            <div class="p-6 space-y-6 border-b border-slate-200 dark:border-slate-700">
+                <h4 class="text-md font-semibold text-slate-800 dark:text-slate-300">1. IT Reviewer</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    ${createField(
+                      "it-risk-assessment",
+                      "itRiskAssessment",
+                      itReviewData.riskAssessment,
+                      "textarea",
+                      canEditReviewerFields
+                    )}
+                    ${createField(
+                      "it-risk-mitigation",
+                      "itRiskMitigation",
+                      itReviewData.riskMitigation,
+                      "textarea",
+                      canEditReviewerFields
+                    )}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    ${createField(
+                      "it-date-received",
+                      "itDateReceived",
+                      itReviewData.dateReceived,
+                      "date",
+                      canEditReviewerFields
+                    )}
+                </div>
+            </div>
+            <div class="p-6 space-y-6 border-b border-slate-200 dark:border-slate-700">
+                <h4 class="text-md font-semibold text-slate-800 dark:text-slate-300">2. IT Manager</h4>
+                ${createField(
+                  "it-manager-comment",
+                  "itManagerComment",
+                  itReviewData.managerComment,
+                  "textarea",
+                  canEditManagerField
+                )}
+            </div>
+            <div class="p-6 space-y-6">
+                <h4 class="text-md font-semibold text-slate-800 dark:text-slate-300">3. IT Director</h4>
+                ${createField(
+                  "it-director-comment",
+                  "itDirectorComment",
+                  itReviewData.directorComment,
+                  "textarea",
+                  canEditDirectorField
+                )}
+            </div>
+        `;
+
+    return `
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+                <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4"><h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${appState.translations.itReviewSectionTitle}</h3></div>
+                <div>${fieldsHtml}</div>
+            </div>
+        `;
+  }
+
+  // --- Form Detail Renderers ---
+  // Central object to hold rendering functions for form-specific details.
+  // This makes it easy to add new form types without modifying the main renderRequestDetails function.
+  const formDetailRenderers = {
+    "ISMS-FM-003": renderForm003Details,
+    "ISMS-FM-010": renderForm010Details,
+    "ISMS-FM-009": renderForm009Details,
+    "ISMS-FM-011": renderForm011Details,
+    "ISMS-FM-012": renderForm012Details,
+    "ISMS-FM-013": renderForm013Details,
+    "ISMS-FM-025": renderForm025Details,
+    "ISMS-FM-026": renderForm026Details,
+    "ISMS-FM-014": renderForm014Details,
+    "ISMS-FM-099": renderForm099Details,
+    "ISMS-FM-100": renderForm100Details,
+    "ISMS-FM-101": renderForm101Details,
+  };
+
+  // Helper function to render form-specific details
+  function renderFormDetails(request, formDetails) {
+    const genericErrorHtml = `
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-red-400"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error loading form details</h3>
+                    <div class="mt-1 text-sm text-red-700">Unable to parse form details data.</div>
+                </div>
+            </div>
+        </div>
+        `;
+
+    if (!formDetails) return genericErrorHtml;
+
+    // Find the renderer based on the form number in the formType string
+    const formNumber = Object.keys(formDetailRenderers).find((key) =>
+      request.formType.includes(key)
+    );
+
+    if (formNumber && formDetailRenderers[formNumber]) {
+      return formDetailRenderers[formNumber](request, formDetails);
+    }
+    return ""; // Return empty string if no specific renderer is found
+  }
+
+  /**
+   * PRIVATE: Renders a standard table for form details.
+   * @param {string} titleKey - Translation key for the card title.
+   * @param {Array<object>} items - The array of data items for the rows.
+   * @param {Array<object>} headers - Array of header objects [{key, labelKey}].
+   * @returns {string} HTML string for the details card.
+   */
+  function _renderDetailTable(titleKey, items, headers) {
+    if (!items || items.length === 0) return "";
+
+    const headerHtml = headers
+      .map(
+        (h) =>
+          `<th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+            appState.translations[h.labelKey]
+          }</th>`
+      )
+      .join("");
+
+    const bodyHtml = items
+      .map(
+        (item) => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                ${headers
+                  .map(
+                    (h) =>
+                      `<td data-label="${
+                        appState.translations[h.labelKey]
+                      }" class="px-6 py-4 whitespace-nowrap text-sm text-slate-800 dark:text-slate-300">${
+                        item[h.key] || "—"
+                      }</td>`
+                  )
+                  .join("")}
+            </tr>
+        `
+      )
+      .join("");
+
+    return `
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+                <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${appState.translations[titleKey]}</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="responsive-table min-w-full">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 hidden md:table-header-group">
+                            <tr>${headerHtml}</tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                            ${bodyHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+  }
+
+  /**
+   * PRIVATE: Renders a standard grid for key-value form details.
+   * @param {string} titleKey - Translation key for the card title.
+   * @param {Array<object>} items - Array of item objects [{labelKey, value}].
+   * @returns {string} HTML string for the details card.
+   */
+  function _renderDetailGrid(titleKey, items) {
+    if (!items || items.length === 0) return "";
+
+    const gridItemsHtml = items
+      .map(
+        (item) => `
+            <div>
+                <strong class="text-slate-600 dark:text-slate-400">${
+                  appState.translations[item.labelKey]
+                }:</strong>
+                <p>${item.value || "—"}</p>
+            </div>
+        `
+      )
+      .join("");
+
+    return `<h4 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">${appState.translations[titleKey]}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg text-sm text-slate-800 dark:text-slate-300">${gridItemsHtml}</div>`;
+  }
+
+  function renderForm003Details(request, formDetails) {
+    return _renderDetailTable("formDetails", formDetails.media, [
+      { key: "mediaType", labelKey: "tableMediaType" },
+      { key: "serialNumber", labelKey: "tableSerialNumber" },
+      { key: "description", labelKey: "tableMediaDescription" },
+      { key: "disposalMethod", labelKey: "tableDisposalMethod" },
+    ]);
+  }
+
+  function renderForm010Details(request, formDetails) {
+    return _renderDetailTable("formDetails", formDetails.servers, [
+      { key: "serverName", labelKey: "tableServerName" },
+      { key: "ipAddress", labelKey: "tableIpAddress" },
+      { key: "connection", labelKey: "tableConnection" },
+      { key: "permission", labelKey: "tablePermission" },
+    ]);
+  }
+
+  function renderForm009Details(request, formDetails) {
+    if (!formDetails.applications) return "";
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                  appState.translations.formDetails
+                }</h3>
+            </div>
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                          appState.translations.formServiceRequestDetails
+                        }</label>
+                        <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 font-semibold">${
+                          formDetails.requestType || "-"
+                        }</p>
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                          appState.translations.formUserType
+                        }</label>
+                        <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 font-semibold">${
+                          formDetails.userType || "-"
+                        }</p>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="responsive-table min-w-full">
+                    <thead class="bg-slate-50 dark:bg-slate-700/50 hidden md:table-header-group">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.formAppName
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.formUsageDetails
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.formPermissionLevel
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.formEffectiveDate
+                            }</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                        ${formDetails.applications
+                          .map(
+                            (app) => `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td data-label="${
+                                  appState.translations.formAppName
+                                }" class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-200">${
+                              app.appName
+                            }</td>
+                                <td data-label="${
+                                  appState.translations.formUsageDetails
+                                }" class="px-6 py-4 whitespace-normal text-sm text-slate-500 dark:text-slate-400">${
+                              app.usageDetails || "—"
+                            }</td>
+                                <td data-label="${
+                                  appState.translations.formPermissionLevel
+                                }" class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${
+                              app.permissionLevel || "-"
+                            }</td>
+                                <td data-label="${
+                                  appState.translations.formEffectiveDate
+                                }" class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${
+                              app.effectiveDate || "-"
+                            }</td>
+                            </tr>
+                        `
+                          )
+                          .join("")}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        `;
+  }
+
+  function renderForm013Details(request, formDetails) {
+    const renderText = (value) => value || "—";
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                  appState.translations.formDetails
+                }</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formObjective
+                    }</label>
+                    <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-md">${renderText(
+                      formDetails.objective
+                    )}</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                          appState.translations.formAccessDuration
+                        }</label>
+                        <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 font-semibold">${renderText(
+                          formDetails.duration
+                        )}</p>
+                    </div>
+                    ${
+                      formDetails.duration === "Temporary"
+                        ? `
+                    <div>
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                          appState.translations.formEndDate
+                        }</label>
+                        <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 font-semibold">${renderText(
+                          formDetails.endDate
+                        )}</p>
+                    </div>
+                    `
+                        : ""
+                    }
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formAcknowledgement
+                    }</label>
+                    <p class="mt-1 text-sm text-slate-900 dark:text-slate-200">${
+                      formDetails.acknowledged
+                        ? `<span class="text-green-600 font-semibold">${appState.translations.formYes}</span>`
+                        : `<span class="text-red-600">${appState.translations.formNo}</span>`
+                    }</p>
+                </div>
+            </div>
+        </div>
+        `;
+  }
+
+  function renderForm011Details(request, formDetails) {
+    if (!formDetails.rules) return "";
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                  appState.translations.formDetails
+                }</h3>
+            </div>
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                          appState.translations.formObjective
+                        }</label>
+                        <p class="mt-1 text-sm text-slate-900 dark:text-slate-200">${
+                          formDetails.objective || "—"
+                        }</p>
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                          appState.translations.formRequestType
+                        }</label>
+                        <p class="mt-1 text-sm text-slate-900 dark:text-slate-200"><span class="inline-block px-3 py-1 rounded-md text-xs font-medium bg-blue-600 text-white">${
+                          formDetails.requestType || "-"
+                        }</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="responsive-table min-w-full">
+                    <thead class="bg-slate-50 dark:bg-slate-700/50 hidden md:table-header-group">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableSourceIp
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableDestIp
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tablePort
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableAction
+                            }</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                        ${formDetails.rules
+                          .map(
+                            (r) => `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td data-label="${
+                                  appState.translations.tableSourceIp
+                                }" class="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-200">${
+                              r.sourceIp
+                            }</td>
+                                <td data-label="${
+                                  appState.translations.tableDestIp
+                                }" class="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-200">${
+                              r.destIp
+                            }</td>
+                                <td data-label="${
+                                  appState.translations.tablePort
+                                }" class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${
+                              r.port
+                            }</td>
+                                <td data-label="${
+                                  appState.translations.tableAction
+                                }" class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-block px-3 py-1 rounded-md text-xs font-medium ${
+                                      r.action === "Allow"
+                                        ? "bg-green-600 text-white"
+                                        : "bg-red-600 text-white"
+                                    }">
+                                        ${r.action}
+                                    </span>
+                                </td>
+                            </tr>
+                        `
+                          )
+                          .join("")}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        `;
+  }
+
+  function renderForm025Details(request, formDetails) {
+    const renderCheck = (value) =>
+      value
+        ? `<span class="text-green-600 font-semibold">✓ ${appState.translations.formYes}</span>`
+        : `<span class="text-red-600">✗ ${appState.translations.formNo}</span>`;
+    const renderText = (value) => value || "—";
+
+    const employeeDetails = _renderDetailGrid("formNewEmployeeDetails", [
+      {
+        labelKey: "formNewEmployeeNameTh",
+        value: renderText(formDetails.newEmployeeNameTh),
+      },
+      {
+        labelKey: "formNewEmployeeNameEn",
+        value: renderText(formDetails.newEmployeeNameEn),
+      },
+      {
+        labelKey: "formNewEmployeeId",
+        value: renderText(formDetails.newEmployeeId),
+      },
+      {
+        labelKey: "formNewEmployeePosition",
+        value: renderText(formDetails.newEmployeePosition),
+      },
+      {
+        labelKey: "formNewEmployeeMobile",
+        value: renderText(formDetails.newEmployeeMobile),
+      },
+      { labelKey: "formStartDate", value: renderText(formDetails.startDate) },
+      {
+        labelKey: "formNewEmployeeType",
+        value: renderText(formDetails.employeeType),
+      },
+      {
+        labelKey: "formSectionBranch",
+        value: renderText(formDetails.sectionBranch),
+      },
+    ]);
+
+    const itSetup = _renderDetailGrid("formSectionITSetup", [
+      {
+        labelKey: "formComputerAccount",
+        value: renderCheck(formDetails.itSetup?.computerAccount),
+      },
+      {
+        labelKey: "formEmailAccount",
+        value: renderCheck(formDetails.itSetup?.emailAccount),
+      },
+      {
+        labelKey: "formPrinterScan",
+        value: renderCheck(formDetails.itSetup?.printerScan),
+      },
+      {
+        labelKey: "formHardware",
+        value: `<span class="font-semibold">${renderText(
+          formDetails.itSetup?.hardware
+        )}</span>`,
+      },
+    ]);
+
+    const accessRights = _renderDetailGrid("formSectionAccessRights", [
+      {
+        labelKey: "formWifiAccess",
+        value: renderCheck(formDetails.accessRights?.wifi),
+      },
+      {
+        labelKey: "formVpnAccess",
+        value: renderCheck(formDetails.accessRights?.vpn),
+      },
+    ]);
+
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                  appState.translations.formDetails
+                }</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                ${employeeDetails}
+                ${itSetup}
+                ${accessRights}
+                ${
+                  formDetails.ccEmails
+                    ? `
+                    <div>
+                        <h4 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">${
+                          appState.translations.formCCTicket
+                        }</h4>
+                        <p class="text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 p-2 rounded">${renderText(
+                          formDetails.ccEmails
+                        )}</p>
+                    </div>
+                `
+                    : ""
+                }
+            </div>
+        </div>
+        `;
+  }
+
+  function renderForm012Details(request, formDetails) {
+    return _renderDetailTable("formDetails", formDetails.software, [
+      { key: "softwareName", labelKey: "tableSoftwareName" },
+      { key: "version", labelKey: "tableVersion" },
+      { key: "reason", labelKey: "tableReason" },
+    ]);
+  }
+
+  function renderForm026Details(request, formDetails) {
+    if (!formDetails.permissions) return "";
+    const userInfo = formDetails.userInfo || {};
+
+    const userInfoGrid = _renderDetailGrid("formUserInfo", [
+      { labelKey: "formNewEmployeeNameTh", value: userInfo.nameTh },
+      { labelKey: "formNewEmployeeNameEn", value: userInfo.nameEn },
+      { labelKey: "formNewEmployeeId", value: userInfo.id },
+      { labelKey: "formNewEmployeePosition", value: userInfo.position },
+    ]);
+
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                  appState.translations.formDetails
+                }</h3>
+            </div>
+            <div class="p-6">
+                ${userInfoGrid}
+            </div>
+            <div class="p-6 border-t border-slate-200 dark:border-slate-700">
+                <h4 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">${
+                  appState.translations.formRequestType
+                }</h4>
+                <p class="text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 p-2 rounded inline-block">${
+                  formDetails.requestType || "-"
+                }</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="responsive-table min-w-full">
+                    <thead class="bg-slate-50 dark:bg-slate-700/50 hidden md:table-header-group">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableModule
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableTransactionCode
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableDescription
+                            }</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">${
+                              appState.translations.tableAction
+                            }</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                        ${formDetails.permissions
+                          .map(
+                            (p) => `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td data-label="${appState.translations.tableModule}" class="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-200">${p.module}</td>
+                                <td data-label="${appState.translations.tableTransactionCode}" class="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-200">${p.transactionCode}</td>
+                                <td data-label="${appState.translations.tableDescription}" class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${p.description}</td>
+                                <td data-label="${appState.translations.tableAction}" class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${p.action}</td>
+                            </tr>
+                        `
+                          )
+                          .join("")}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        `;
+  }
+
+  function renderForm014Details(request, formDetails) {
+    const renderCheck = (value) =>
+      value
+        ? `<span class="text-green-600 font-semibold">✓</span>`
+        : `<span class="text-slate-400">✗</span>`;
+    const usersWithChecks = (formDetails.users || []).map((u) => ({
+      ...u,
+      internet: renderCheck(u.internet),
+      intranet: renderCheck(u.intranet),
+    }));
+
+    return (
+      `
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden p-6 border-b border-slate-200 dark:border-slate-700">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                  appState.translations.formObjective
+                }</label>
+                <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-md">${
+                  formDetails.objective || "—"
+                }</p>
+            </div>
+        ` +
+      _renderDetailTable("formDetails", usersWithChecks, [
+        { key: "name", labelKey: "formRequesterName" },
+        { key: "position", labelKey: "formPosition" },
+        { key: "internet", labelKey: "formInternet" },
+        { key: "intranet", labelKey: "formIntranet" },
+        { key: "notes", labelKey: "detailNotes" },
+      ])
+    );
+  }
+
+  function renderForm099Details(request, formDetails) {
+    const renderText = (value) => value || "—";
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">${
+                  appState.translations.formDetails
+                }</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formObjective
+                    }</label>
+                    <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-md">${renderText(
+                      formDetails.objective
+                    )}</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formStartDate
+                    }</label><p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-200">${renderText(
+      formDetails.startDate
+    )}</p></div>
+                    <div><label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formEndDate
+                    }</label><p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-200">${renderText(
+      formDetails.endDate
+    )}</p></div>
+                    <div><label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formHardware
+                    }</label><p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-200">${renderText(
+      formDetails.hardware
+    )}</p></div>
+                </div>
+                ${
+                  formDetails.requiredSoftware
+                    ? `
+                <div>
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400">${
+                      appState.translations.formRequiredSoftware
+                    }</label>
+                    <p class="mt-1 text-sm text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-md">${renderText(
+                      formDetails.requiredSoftware
+                    )}</p>
+                </div>
+                `
+                    : ""
+                }
+            </div>
+        </div>
+        `;
+  }
+
+  function renderForm100Details(request, formDetails) {
+    const recipientGrid = _renderDetailGrid("formSectionBRecipient", [
+      { labelKey: "formRecipientName", value: formDetails.recipientInfo?.name },
+      {
+        labelKey: "formRecipientPosition",
+        value: formDetails.recipientInfo?.position,
+      },
+      {
+        labelKey: "formRecipientDepartment",
+        value: formDetails.recipientInfo?.department,
+      },
+      { labelKey: "formTelephone", value: formDetails.recipientInfo?.tel },
+    ]);
+
+    const equipmentTable = _renderDetailTable(
+      "formSectionCItems",
+      formDetails.equipment,
+      [
+        { key: "item", labelKey: "tableItem" },
+        { key: "serialNumber", labelKey: "tableSerialNumber" },
+        { key: "assetCode", labelKey: "tableAssetCode" },
+        { key: "notes", labelKey: "detailNotes" },
+      ]
+    );
+
+    return `<div class="p-6 space-y-6">${recipientGrid}</div>` + equipmentTable;
+  }
+
+  function renderForm101Details(request, formDetails) {
+    return _renderDetailTable("formSectionBDisposal", formDetails.assets, [
+      { key: "assetType", labelKey: "tableAssetType" },
+      { key: "serialNumber", labelKey: "tableSerialNumber" },
+      { key: "reason", labelKey: "tableDisposalReason" },
+    ]);
+  }
+
+  /**
+   * Renders the entire Admin Dashboard view, including title and stats cards.
+   */
+  function renderAdminDashboardView(stats) {
+    const container = document.getElementById("admin-dashboard-view");
+    if (!container) return;
+
+    if (!stats) {
+      container.innerHTML = `<p class="text-center text-red-500 p-8">${appState.translations.errorLoadingData}</p>`;
+      return;
+    }
+
+    container.innerHTML = `
+            <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 fade-in">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1" data-translate-key="dashboardTitle">Admin Dashboard</h2>
+                    <p class="text-slate-600 dark:text-slate-400" data-translate-key="dashboardSubtitle">Overview of all requests in the system.</p>
+                </div>
+                ${_renderDashboardCards(stats)}
+                ${_renderDashboardBreakdowns(stats)}
+            </div>
+        `;
+    applyTranslations();
+  }
+
+  /**
+   * Generates the HTML for the statistics cards.
+   * @param {Object} stats - The statistics object from getDashboardStats.
+   * @returns {string} The HTML string for the cards.
+   */
+  function _renderDashboardCards(stats) {
+    const totalPending = stats.statuses.pending + stats.statuses.forwarded;
+    return `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Pending Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 flex items-center justify-between border-l-4 border-yellow-400">
+                    <div>
+                        <p class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase" data-translate-key="filterPending">Pending</p>
+                        <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">${
+                          totalPending || 0
+                        }</p>
+                        ${
+                          stats.statuses.forwarded > 0
+                            ? `<p class="text-xs text-slate-500 dark:text-slate-400">${stats.statuses.pending} Pending + ${stats.statuses.forwarded} Forwarded</p>`
+                            : ""
+                        }
+                    </div>
+                    <div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-500/20 rounded-full flex items-center justify-center">
+                        <i class="fas fa-hourglass-half text-yellow-500 text-xl"></i>
+                    </div>
+                </div>
+                <!-- Approved Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 flex items-center justify-between border-l-4 border-green-400">
+                    <div>
+                        <p class="text-sm font-medium text-green-600 dark:text-green-400 uppercase" data-translate-key="filterApproved">Approved</p>
+                        <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">${
+                          stats.statuses.approved || 0
+                        }</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 dark:bg-green-500/20 rounded-full flex items-center justify-center">
+                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                    </div>
+                </div>
+                <!-- Rejected Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 flex items-center justify-between border-l-4 border-red-400">
+                    <div>
+                        <p class="text-sm font-medium text-red-600 dark:text-red-400 uppercase" data-translate-key="filterRejected">Rejected</p>
+                        <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">${
+                          stats.statuses.rejected || 0
+                        }</p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 dark:bg-red-500/20 rounded-full flex items-center justify-center">
+                        <i class="fas fa-times-circle text-red-500 text-xl"></i>
+                    </div>
+                </div>
+                <!-- Total Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 flex items-center justify-between border-l-4 border-blue-400">
+                    <div>
+                        <p class="text-sm font-medium text-blue-600 dark:text-blue-400 uppercase">Total Requests</p>
+                        <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">${
+                          stats.total || 0
+                        }</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <i class="fas fa-file-alt text-blue-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+  }
+
+  /**
+   * Generates the HTML for the breakdown cards (by Form Type and Department).
+   * @param {Object} stats - The statistics object from getDashboardStats.
+   * @returns {string} The HTML string for the breakdown section.
+   */
+  function _renderDashboardBreakdowns(stats) {
+    // Helper to sort and create list items with progress bars
+    const createListItems = (dataObject, totalCount) => {
+      if (
+        !dataObject ||
+        Object.keys(dataObject).length === 0 ||
+        totalCount === 0
+      ) {
+        return `<li class="text-sm text-slate-500 dark:text-slate-400">No data available.</li>`;
+      }
+      // Sort by count descending
+      return Object.entries(dataObject)
+        .sort(([, a], [, b]) => b - a)
+        .map(([key, value]) => {
+          const percentage = (value / totalCount) * 100;
+          return `
+                    <li class="space-y-2">
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-sm font-medium text-slate-600 dark:text-slate-300 truncate pr-4" title="${key}">${key}</span>
+                            <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">${value}</span>
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                            <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${percentage.toFixed(
+                              2
+                            )}%"></div>
+                        </div>
+                    </li>
+                `;
+        })
+        .join("");
+    };
+
+    const formTypeItems = createListItems(stats.byFormType, stats.total);
+    const departmentItems = createListItems(stats.byDepartment, stats.total);
+
+    return `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- By Form Type Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                        <h3 class="text-base font-semibold text-slate-800 dark:text-slate-200" data-translate-key="dashboardByFormType">Requests by Form Type</h3>
+                    </div>
+                    <ul class="p-4 space-y-4">${formTypeItems}</ul>
+                </div>
+
+                <!-- By Department Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                        <h3 class="text-base font-semibold text-slate-800 dark:text-slate-200" data-translate-key="dashboardByDepartment">Requests by Department</h3>
+                    </div>
+                    <ul class="p-4 space-y-4">${departmentItems}</ul>
+                </div>
+            </div>
+        `;
+  }
+
+  /**
+   * Renders the Admin Settings view.
+   * @param {Object} settings - The current settings object from the backend.
+   */
+  function renderSettingsView(settings) {
+    // Prepare form management section
+    const formTogglesHtml = Object.keys(window.FORM_CONFIG)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map((formId) => {
+        const formInfo = appState.translations.forms[formId];
+        if (!formInfo) return "";
+
+        const isEnabled = !settings.disabledForms.includes(formId);
+
+        return `
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 last:border-b-0">
+                    <div>
+                        <p class="font-medium text-slate-800 dark:text-slate-200">${
+                          formInfo.shortTitle
+                        }</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">ISMS-FM-${formId}</p>
+                    </div>
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" value="${formId}" class="sr-only peer form-toggle-switch" ${
+          isEnabled ? "checked" : ""
+        }>
+                        <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            `;
+      })
+      .join("");
+
+    const formManagementSection = `
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200" data-translate-key="settingsFormManagement">Form Management</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400" data-translate-key="settingsFormManagementSubtitle">Enable or disable specific form types.</p>
+                <div class="mt-4 border border-slate-200 dark:border-slate-700 rounded-lg">
+                    ${formTogglesHtml}
+                </div>
+            </div>
+        `;
+
+    const container = document.getElementById("settings-view");
+    if (!container) return;
+
+    const createInputRow = (id, labelKey, value, placeholder = "") => `
+            <div>
+                <label for="${id}" class="block text-sm font-medium text-slate-700 dark:text-slate-300">${
+      appState.translations[labelKey]
+    }</label>
+                <div class="mt-1">
+                    <input type="text" id="${id}" value="${
+      value || ""
+    }" placeholder="${placeholder}"
+                        class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                </div>
+            </div>
+        `;
+
+    container.innerHTML = `
+            <div class="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8 fade-in">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1" data-translate-key="settingsTitle">System Settings</h2>
+                    <p class="text-slate-600 dark:text-slate-400" data-translate-key="settingsSubtitle">Manage core system configurations.</p>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200" data-translate-key="settingsEmailConfig">Email Configuration</h3>
+                        <div class="mt-4 space-y-4">
+                            ${createInputRow(
+                              "setting-helpdesk-email",
+                              "settingsHelpdeskEmail",
+                              settings.helpdeskEmail,
+                              "helpdesk@example.com"
+                            )}
+                            ${createInputRow(
+                              "setting-it-reviewer-email",
+                              "settingsItReviewerEmail",
+                              settings.itReviewerEmail,
+                              "it.reviewer@example.com"
+                            )}
+                        </div>
+                    </div>
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200" data-translate-key="settingsBackupConfig">Backup Configuration</h3>
+                        <div class="mt-4 space-y-4">
+                            ${createInputRow(
+                              "setting-backup-folder-id",
+                              "settingsBackupFolderId",
+                              settings.backupFolderId,
+                              "Enter Google Drive Folder ID"
+                            )}
+                        </div>
+                    </div>
+                    ${_renderItReviewManagementSection(settings)}
+                    ${formManagementSection}
+                    <div class="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl flex justify-end">
+                        <button onclick="saveSettings()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium" data-translate-key="btnSave">
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    // Apply translations to the newly rendered content
+    applyTranslations();
+  }
+
+  /**
+   * Renders the IT Review management section for the Settings page.
+   * @param {Object} settings - The settings object containing itReviewForms and itReviewFlows.
+   * @returns {string} The HTML string for the IT review management section.
+   */
+  function _renderItReviewManagementSection(settings) {
+    const allPossibleItForms = Object.keys(window.FORM_CONFIG);
+    const itReviewFlowsMap = (settings.itReviewFlows || []).reduce(
+      (acc, flow) => {
+        acc[flow.formId] = flow;
+        return acc;
+      },
+      {}
+    );
+
+    const formRowsHtml = allPossibleItForms
+      .map((formId) => {
+        const isEnabled = settings.itReviewForms.includes(formId);
+        const flow = itReviewFlowsMap[formId] || {};
+
+        return `
+                <tr class="it-review-row border-b border-slate-200 dark:border-slate-700" data-form-id="${formId}">
+                    <td class="p-3 align-middle">
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox" value="${formId}" class="it-review-form-toggle form-checkbox h-5 w-5 text-blue-600" ${
+          isEnabled ? "checked" : ""
+        }>
+                            <span class="font-mono text-sm text-slate-700 dark:text-slate-300">${formId}</span>
+                        </label>
+                    </td>
+                    <td class="p-3 align-middle">
+                        <input type="email" name="reviewerEmail" value="${
+                          flow.reviewerEmail || ""
+                        }" placeholder="Reviewer Email"
+                            class="it-review-flow-input w-full rounded-md border-0 px-3 py-1.5 text-sm bg-white dark:bg-slate-700 ring-1 ring-inset ring-slate-300 dark:ring-slate-600" ${
+                              !isEnabled ? "disabled" : ""
+                            }>
+                    </td>
+                    <td class="p-3 align-middle">
+                        <input type="email" name="managerEmail" value="${
+                          flow.managerEmail || ""
+                        }" placeholder="Manager Email"
+                            class="it-review-flow-input w-full rounded-md border-0 px-3 py-1.5 text-sm bg-white dark:bg-slate-700 ring-1 ring-inset ring-slate-300 dark:ring-slate-600" ${
+                              !isEnabled ? "disabled" : ""
+                            }>
+                    </td>
+                    <td class="p-3 align-middle">
+                        <input type="email" name="directorEmail" value="${
+                          flow.directorEmail || ""
+                        }" placeholder="Director Email"
+                            class="it-review-flow-input w-full rounded-md border-0 px-3 py-1.5 text-sm bg-white dark:bg-slate-700 ring-1 ring-inset ring-slate-300 dark:ring-slate-600" ${
+                              !isEnabled ? "disabled" : ""
+                            }>
+                    </td>
+                </tr>
+            `;
+      })
+      .join("");
+
+    return `
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">IT Review Workflow</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Configure which forms require IT review and who the reviewers are.</p>
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-600">
+                                <th class="p-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Enable</th>
+                                <th class="p-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">IT Reviewer</th>
+                                <th class="p-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">IT Manager</th>
+                                <th class="p-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">IT Director</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${formRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+  }
+
+  document.addEventListener("change", function (event) {
+    if (event.target.classList.contains("it-review-form-toggle")) {
+      const row = event.target.closest(".it-review-row");
+      const inputs = row.querySelectorAll(".it-review-flow-input");
+      inputs.forEach((input) => {
+        input.disabled = !event.target.checked;
+        if (!event.target.checked) {
+          // Optionally clear inputs when disabled
+          // input.value = '';
+        }
+      });
+    }
+  });
+
+  // --- UTILITIES & MODAL ---
+  function downloadPdf(requestId) {
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (response.error) {
+          handleError(response.error);
+        } else {
+          try {
+            const link = document.createElement("a");
+            link.href = `data:application/pdf;base64,${response.base64}`;
+            link.download = response.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage(
+              appState.translations.msgPdfDownloaded || "PDF download started."
+            );
+          } catch (e) {
+            handleError("Failed to initiate PDF download.");
+          }
+        }
+      })
+      .withFailureHandler(handleError)
+      .generatePdfAsBase64(requestId);
+  }
+
+  function formatDate(d) {
+    if (!d) return "-";
+    const locale = appState.currentLanguage === "en" ? "en-GB" : "th-TH";
+    return new Date(d).toLocaleString(locale, {
+      year: "2-digit",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function getStatusClass(status) {
+    switch (status) {
+      case "Approved":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+      case "Rejected":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+      case "Forwarded":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
+      case "Pending IT":
+        return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
+      case "Pending IT Reviewer":
+        return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
+      case "Pending IT Manager":
+        return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
+      case "Pending IT Director":
+        return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
+      case "Pending":
+      default:
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+    }
+  }
+
+  function renderApprovalConfirmationSummary(action, notes, nextApproverEmail) {
+    const summaryContainer = document.getElementById("confirmation-summary");
+    let actionText, actionColor;
+
+    switch (action) {
+      case STATUS.APPROVED:
+        actionText = appState.translations.btnApprove;
+        actionColor = "text-green-600";
+        break;
+      case STATUS.REJECTED:
+        actionText = appState.translations.btnReject;
+        actionColor = "text-red-600";
+        break;
+      case STATUS.FORWARDED:
+        actionText = appState.translations.approveAndForward;
+        actionColor = "text-yellow-600";
+        break;
+    }
+
+    summaryContainer.innerHTML = `
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <strong class="text-slate-600 dark:text-slate-400">${
+                      appState.translations.modalConfirmAction
+                    }:</strong>
+                    <span class="font-bold ${actionColor}">${actionText}</span>
+                </div>
+                
+                ${
+                  action === STATUS.FORWARDED
+                    ? `
+                <div class="flex justify-between items-center">
+                    <strong class="text-slate-600 dark:text-slate-400">${appState.translations.summaryWillBeSentTo}:</strong>
+                    <span class="font-bold text-blue-600">${nextApproverEmail}</span>
+                </div>`
+                    : ""
+                }
+                ${
+                  notes
+                    ? `<div class="pt-2 border-t border-slate-200 dark:border-slate-600"><strong class="text-slate-600 dark:text-slate-400">${appState.translations.modalNotesLabel}:</strong><p class="text-slate-700 dark:text-slate-300 italic mt-1">“${notes}”</p></div>`
+                    : ""
+                }
+            </div>`;
+  }
+
+  function openApprovalActionModal(requestId, action) {
+    const modal = document.getElementById("approval-modal");
+    const title = document.getElementById("modal-title");
+    const confirmBtn = document.getElementById("modal-confirm-btn");
+    const forwardContainer = document.getElementById("forward-container");
+    const forwardSelect = document.getElementById("forward-approver-select");
+
+    document.getElementById("approval-notes").value = "";
+    forwardContainer.classList.add("hidden");
+
+    let titleText = "";
+    let btnClass = "";
+    let btnText = "";
+
+    switch (action) {
+      case STATUS.REJECTED: // Reject
+        titleText = appState.translations.btnReject;
+        btnClass =
+          "w-full text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center";
+        btnText = appState.translations.btnReject;
+        break;
+      case STATUS.APPROVED: // Approve & End
+        titleText = appState.translations.btnApprove;
+        btnClass =
+          "w-full text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center";
+        btnText = appState.translations.btnApprove;
+        break;
+      case STATUS.FORWARDED: // Approve & Forward
+        titleText = appState.translations.approveAndForward;
+        btnClass =
+          "w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center";
+        btnText = appState.translations.approveAndForward;
+        forwardContainer.classList.remove("hidden");
+        // Populate the dropdown
+        forwardSelect.innerHTML = `<option>${appState.translations.loaderText}</option>`;
+        google.script.run
+          .withSuccessHandler((approvers) => {
+            if (approvers && approvers.length > 0) {
+              forwardSelect.innerHTML = `<option value="">${appState.translations.selectNextApprover}</option>`;
+              approvers.forEach((app) => {
+                const option = document.createElement("option");
+                option.value = app.email;
+                option.textContent = `${app.name} (${app.email})`;
+                forwardSelect.appendChild(option);
+              });
+            } else {
+              forwardSelect.innerHTML = `<option>${appState.translations.noHigherLevelApprovers}</option>`;
+            }
+          })
+          .withFailureHandler(handleError)
+          .getForwardableApprovers();
+        break;
+    }
+
+    title.textContent = titleText;
+    confirmBtn.className = btnClass;
+    confirmBtn.textContent = btnText;
+
+    confirmBtn.onclick = () => {
+      const notes = document.getElementById("approval-notes").value;
+      let nextApproverEmail = null;
+
+      if (action === STATUS.FORWARDED) {
+        const forwardSelect = document.getElementById(
+          "forward-approver-select"
+        );
+        nextApproverEmail = forwardSelect.value;
+        if (!nextApproverEmail) {
+          showMessage(
+            appState.translations.msgNextApproverRequired ||
+              "Please select an approver to forward to.",
+            true
+          );
+          return;
+        }
+      }
+
+      closeApprovalActionModal();
+      // Open the submission confirmation modal instead
+      renderApprovalConfirmationSummary(action, notes, nextApproverEmail);
+      const submissionModal = document.getElementById(
+        "submission-confirmation-modal"
+      );
+      document.getElementById("confirmSubmissionTitle").textContent =
+        appState.translations.modalConfirmAction;
+      const confirmSubmissionBtn = document.getElementById(
+        "modal-confirm-submission-btn"
+      );
+      confirmSubmissionBtn.textContent = appState.translations.btnConfirmSubmit;
+      confirmSubmissionBtn.onclick = () =>
+        handleApprovalAction(requestId, action, notes, nextApproverEmail);
+      submissionModal.classList.remove("hidden");
+    };
+
+    modal.classList.remove("hidden");
+  }
+
+  function closeApprovalActionModal() {
+    document.getElementById("approval-modal").classList.add("hidden");
+  }
+  function closeSubmissionModal() {
+    document
+      .getElementById("submission-confirmation-modal")
+      .classList.add("hidden");
+  }
+  function closeApproverModal() {
+    document
+      .getElementById("approver-management-modal")
+      .classList.add("hidden");
+  }
+
+  function handleApprovalAction(requestId, action, notes, nextApproverEmail) {
+    closeSubmissionModal();
+
+    // Collect IT review data if the form is visible and editable
+    let itReviewData = null;
+    const itFields = document.querySelectorAll(".it-review-field");
+    if (itFields.length > 0) {
+      itReviewData = {
+        dateReceived: document.getElementById("it-date-received")?.value,
+        riskAssessment: document.getElementById("it-risk-assessment")?.value,
+        riskMitigation: document.getElementById("it-risk-mitigation")?.value,
+        managerComment: document.getElementById("it-manager-comment")?.value,
+        directorComment: document.getElementById("it-director-comment")?.value,
+      };
+    }
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (res.status === "success") {
+          showMessage(res.message);
+          showView("approvals-view");
+        } else {
+          handleError(res);
+        }
+      })
+      .withFailureHandler(handleError)
+      .processApproval(
+        requestId,
+        action,
+        notes,
+        nextApproverEmail,
+        appState.currentLanguage,
+        itReviewData
+      );
+  }
+
+  function populateApproverSubDepartments() {
+    const deptSelect = document.getElementById("approver-department");
+    const subDeptSelect = document.getElementById("approver-subdepartment");
+    const selectedDept = deptSelect.value;
+
+    subDeptSelect.innerHTML = `<option value="">-- ${
+      appState.translations.noSubDepartment || "No Sub-Department"
+    } --</option>`; // Default empty option
+
+    if (selectedDept && appState.availableSubDepartments[selectedDept]) {
+      const subDepts = appState.availableSubDepartments[selectedDept];
+      subDeptSelect.innerHTML += subDepts
+        .map((sd) => `<option value="${sd}">${sd}</option>`)
+        .join("");
+    }
+  }
+
+  function openApproverModal(elementOrNull) {
+    const modal = document.getElementById("approver-management-modal");
+    const title = document.getElementById("approver-modal-title");
+    const form = document.getElementById("approver-form");
+    form.reset();
+
+    let approver = null;
+    // If an element is passed, it's an edit action.
+    if (elementOrNull) {
+      try {
+        // The browser automatically handles un-escaping of &apos;
+        approver = JSON.parse(elementOrNull.dataset.approver);
+      } catch (e) {
+        console.error("Failed to parse approver data from data-attribute", e);
+        handleError("Could not load approver data for editing.");
+        return;
+      }
+    }
+
+    const emailInput = document.getElementById("approver-email");
+    const positionSelect = document.getElementById("approver-position");
+    const departmentSelect = document.getElementById("approver-department");
+    const subDepartmentSelect = document.getElementById(
+      "approver-subdepartment"
+    );
+
+    // Populate department dropdown
+    departmentSelect.innerHTML =
+      `<option value="">-- Global --</option>` +
+      appState.availableDepartments
+        .map((d) => `<option value="${d}">${d}</option>`)
+        .join("");
+
+    // Populate position dropdown
+    positionSelect.innerHTML =
+      `<option value="">${
+        appState.translations.formSelectPosition || "-- Select Position --"
+      }</option>` +
+      appState.availablePositions
+        .map((p) => `<option value="${p}">${p}</option>`)
+        .join("");
+
+    if (approver) {
+      // Editing existing approver
+      title.textContent = appState.translations.modalEditApproverTitle;
+      document.getElementById("approver-action-type").value = "update";
+      document.getElementById("original-approver-email").value =
+        approver.approverEmail;
+      departmentSelect.value = approver.department || "";
+
+      // Populate and set sub-department
+      populateApproverSubDepartments();
+      subDepartmentSelect.value = approver.subDepartment || "";
+
+      document.getElementById("approver-name").value = approver.approverName;
+      positionSelect.value = approver.position || "";
+      emailInput.value = approver.approverEmail;
+      document.getElementById("approver-level").value = approver.level;
+      document.getElementById("approver-role").value =
+        approver.role || "Approver";
+    } else {
+      // Adding new approver
+      title.textContent = appState.translations.modalAddApproverTitle;
+      document.getElementById("approver-action-type").value = "add";
+      document.getElementById("approver-role").value = "Approver";
+      populateApproverSubDepartments(); // Initialize with empty options
+      emailInput.readOnly = false;
+    }
+    modal.classList.remove("hidden");
+  }
+
+  function saveApprover() {
+    const action = document.getElementById("approver-action-type").value;
+    const approverData = {
+      department: document.getElementById("approver-department").value,
+      approverName: document.getElementById("approver-name").value,
+      subDepartment: document.getElementById("approver-subdepartment").value,
+      position: document.getElementById("approver-position").value,
+      email: document.getElementById("approver-email").value,
+      level: document.getElementById("approver-level").value,
+      role: document.getElementById("approver-role").value,
+      originalEmail: document.getElementById("original-approver-email").value, // For updates
+    };
+
+    if (
+      !approverData.approverName ||
+      !approverData.email ||
+      !approverData.level
+    ) {
+      showMessage(
+        appState.translations.msgFillRequiredFields ||
+          "Please fill all required fields (*).",
+        true
+      );
+      return;
+    }
+
+    closeApproverModal();
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (res.status === "success") {
+          showMessage(res.message);
+          showView("manage-approvers-view"); // Correctly reload the view to refetch data
+        } else {
+          handleError(res);
+        }
+      })
+      .withFailureHandler(handleError)
+      .manageApprover(action, approverData);
+  }
+
+  function deleteApprover(email) {
+    const modal = document.getElementById("submission-confirmation-modal");
+    const titleEl = document.getElementById("confirmSubmissionTitle");
+    const summaryEl = document.getElementById("confirmation-summary");
+    const confirmBtn = document.getElementById("modal-confirm-submission-btn");
+    const originalBtnClass = confirmBtn.className;
+
+    titleEl.textContent =
+      appState.translations.confirmDeleteApproverTitle || "Confirm Deletion";
+    summaryEl.innerHTML = `<p class="text-center text-slate-700">${
+      appState.translations.confirmDeleteApproverMsg ||
+      "Are you sure you want to delete this approver?"
+    }</p>`;
+
+    confirmBtn.textContent = appState.translations.btnDelete || "Delete";
+    confirmBtn.className =
+      "w-full px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium";
+
+    confirmBtn.onclick = () => {
+      closeSubmissionModal();
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res.status === "success") {
+            showMessage(res.message);
+            showView("manage-approvers-view"); // Correctly reload the view to refetch data
+          } else {
+            handleError(res);
+          }
+          // Reset button style after use
+          confirmBtn.className = originalBtnClass;
+        })
+        .withFailureHandler(handleError)
+        .manageApprover("delete", { email: email });
+    };
+
+    modal.classList.remove("hidden");
+  }
+</script>
